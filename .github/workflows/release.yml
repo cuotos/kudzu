@@ -1,9 +1,9 @@
 name: Release
 
-# When a release is published, add `latest` and the version tag to the image
-# that was already built from the release's commit. This re-tags the existing
-# manifest server-side (no rebuild), so the released image is byte-identical to
-# what was tested on main.
+# When a release is published, add `latest`, the exact version tag, and the
+# floating major/minor tags (e.g. v1, v1.2) to the image that was already built
+# from the release's commit. This re-tags the existing manifest server-side (no
+# rebuild), so the released image is byte-identical to what was tested on main.
 on:
   release:
     types: [published]
@@ -35,11 +35,25 @@ jobs:
         run: |
           set -euo pipefail
           IMAGE="ghcr.io/${REPO,,}"
-          echo "Re-tagging ${IMAGE}:${SHA} as :latest and :${VERSION}"
-          docker buildx imagetools create \
-            --tag "${IMAGE}:latest" \
-            --tag "${IMAGE}:${VERSION}" \
-            "${IMAGE}:${SHA}"
+
+          # Always apply the exact version tag (e.g. v1.2.3).
+          TAGS=(--tag "${IMAGE}:${VERSION}")
+
+          # For a clean semver release (vMAJOR.MINOR.PATCH, no pre-release/build
+          # suffix) also move the floating major/minor pointers and `latest`, so
+          # users can pin to v1 or v1.2. Pre-releases keep only their exact tag.
+          if [[ "${VERSION}" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            MAJOR="v${BASH_REMATCH[1]}"
+            MINOR="v${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+            TAGS+=(--tag "${IMAGE}:${MAJOR}")
+            TAGS+=(--tag "${IMAGE}:${MINOR}")
+            TAGS+=(--tag "${IMAGE}:latest")
+          else
+            echo "Pre-release/non-semver tag ${VERSION}; tagging exact version only"
+          fi
+
+          echo "Re-tagging ${IMAGE}:${SHA} as: ${TAGS[*]}"
+          docker buildx imagetools create "${TAGS[@]}" "${IMAGE}:${SHA}"
 
       - uses: azure/setup-helm@v5
 
