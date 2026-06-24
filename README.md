@@ -135,6 +135,24 @@ The service is stateless (state lives in Redis) and runs ≥2 replicas with
 liveness/readiness probes, a Prometheus `ServiceMonitor`, and an optional HPA
 and NetworkPolicy.
 
+### Redis: bundled vs external
+
+The chart bundles a single-node Redis (`redis.enabled: true`, the default) to
+get you running quickly. It has **no persistence** — a Redis restart clears all
+gate state (freezes, trips, schedules) — so treat it as convenient, not durable.
+
+For production, disable the bundled Redis and point Kudzu at an external/HA
+(and ideally persistent) Redis:
+
+```sh
+helm upgrade --install kudzu oci://ghcr.io/cuotos/charts/kudzu --version <X.Y.Z> \
+  --set redis.enabled=false \
+  --set config.redis.addr=my-redis-master:6379
+```
+
+When `redis.enabled` is true, `REDIS_ADDR` is derived from the bundled Service
+and `config.redis.addr` is ignored.
+
 ## Layout
 
 ```
