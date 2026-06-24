@@ -15,6 +15,8 @@ jobs:
       contents: read
       packages: write
     steps:
+      - uses: actions/checkout@v7
+
       - name: Log in to GHCR
         uses: docker/login-action@v4
         with:
@@ -38,3 +40,28 @@ jobs:
             --tag "${IMAGE}:latest" \
             --tag "${IMAGE}:${VERSION}" \
             "${IMAGE}:${SHA}"
+
+      - uses: azure/setup-helm@v5
+
+      - name: Package and push the Helm chart to GHCR (OCI)
+        env:
+          OWNER: ${{ github.repository_owner }}
+          TAG: ${{ github.event.release.tag_name }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Helm chart versions must be SemVer without a leading "v"; the app
+          # version (= the image tag the chart defaults to) keeps the tag verbatim.
+          CHART_VERSION="${TAG#v}"
+          OCI="oci://ghcr.io/${OWNER,,}/charts"
+
+          echo "${GITHUB_TOKEN}" | helm registry login ghcr.io \
+            --username "${{ github.actor }}" --password-stdin
+
+          helm package deploy/helm/kudzu \
+            --version "${CHART_VERSION}" \
+            --app-version "${TAG}" \
+            --destination .
+
+          echo "Pushing kudzu-${CHART_VERSION}.tgz to ${OCI}"
+          helm push "kudzu-${CHART_VERSION}.tgz" "${OCI}"

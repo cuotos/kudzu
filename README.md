@@ -121,6 +121,16 @@ helm upgrade --install kudzu deploy/helm/kudzu \
   --set github.evictionEnabled=true
 ```
 
+Each published release also pushes the packaged chart to GHCR as an OCI
+artifact, so you can install a released version without checking out the repo
+(the chart's default `image.tag` matches the release):
+
+```sh
+helm upgrade --install kudzu oci://ghcr.io/cuotos/charts/kudzu --version <X.Y.Z> \
+  --set config.redis.addr=redis-master:6379 \
+  --set github.evictionEnabled=true
+```
+
 The service is stateless (state lives in Redis) and runs ≥2 replicas with
 liveness/readiness probes, a Prometheus `ServiceMonitor`, and an optional HPA
 and NetworkPolicy.
