@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bloomandwild/kudzu/internal/schedule"
+	"github.com/cuotos/kudzu/internal/schedule"
 )
 
 // fakeStore is a minimal in-package gate.Store so these tests can set the

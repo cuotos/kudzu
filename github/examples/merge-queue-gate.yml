@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check Kudzu deployment gate
-        uses: bloomandwild/kudzu/github@v1
+        uses: cuotos/kudzu/github@v1
         with:
           url: ${{ vars.KUDZU_URL }}
           service: ${{ github.event.repository.name }}

@@ -12,7 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/bloomandwild/kudzu/internal/gate"
+	"github.com/cuotos/kudzu/internal/gate"
 )
 
 // GateLister is the subset of gate.Service the collector needs.

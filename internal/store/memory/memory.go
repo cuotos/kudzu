@@ -6,8 +6,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/bloomandwild/kudzu/internal/gate"
-	"github.com/bloomandwild/kudzu/internal/schedule"
+	"github.com/cuotos/kudzu/internal/gate"
+	"github.com/cuotos/kudzu/internal/schedule"
 )
 
 const auditCap = 100

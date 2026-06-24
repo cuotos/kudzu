@@ -8,8 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/bloomandwild/kudzu/internal/gate"
-	"github.com/bloomandwild/kudzu/internal/store/memory"
+	"github.com/cuotos/kudzu/internal/gate"
+	"github.com/cuotos/kudzu/internal/store/memory"
 )
 
 const testToken = "s3cret"

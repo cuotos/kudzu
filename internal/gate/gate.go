@@ -7,7 +7,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/bloomandwild/kudzu/internal/schedule"
+	"github.com/cuotos/kudzu/internal/schedule"
 )
 
 // State is the effective state of a gate.

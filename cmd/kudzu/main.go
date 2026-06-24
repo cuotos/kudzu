@@ -13,12 +13,12 @@ import (
 
 	goredis "github.com/redis/go-redis/v9"
 
-	"github.com/bloomandwild/kudzu/internal/config"
-	"github.com/bloomandwild/kudzu/internal/gate"
-	gh "github.com/bloomandwild/kudzu/internal/github"
-	"github.com/bloomandwild/kudzu/internal/httpapi"
-	"github.com/bloomandwild/kudzu/internal/observability"
-	redisstore "github.com/bloomandwild/kudzu/internal/store/redis"
+	"github.com/cuotos/kudzu/internal/config"
+	"github.com/cuotos/kudzu/internal/gate"
+	gh "github.com/cuotos/kudzu/internal/github"
+	"github.com/cuotos/kudzu/internal/httpapi"
+	"github.com/cuotos/kudzu/internal/observability"
+	redisstore "github.com/cuotos/kudzu/internal/store/redis"
 )
 
 func main() {

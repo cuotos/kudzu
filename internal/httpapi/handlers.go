@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/bloomandwild/kudzu/internal/gate"
-	"github.com/bloomandwild/kudzu/internal/schedule"
+	"github.com/cuotos/kudzu/internal/gate"
+	"github.com/cuotos/kudzu/internal/schedule"
 )
 
 // GateService is the behaviour the HTTP layer needs from gate.Service.

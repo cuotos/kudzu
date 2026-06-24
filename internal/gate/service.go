@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/bloomandwild/kudzu/internal/schedule"
+	"github.com/cuotos/kudzu/internal/schedule"
 )
 
 // ErrInvalidKey is returned when a service/env is missing.

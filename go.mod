@@ -1,4 +1,4 @@
-module github.com/bloomandwild/kudzu
+module github.com/cuotos/kudzu
 
 go 1.26
 
