@@ -35,7 +35,11 @@ spec:
             - name: KUDZU_ADDR
               value: ":{{ .Values.service.port }}"
             - name: REDIS_ADDR
+            {{- if .Values.redis.enabled }}
+              value: "{{ include "kudzu.fullname" . }}-redis:{{ .Values.redis.port }}"
+            {{- else }}
               value: {{ .Values.config.redis.addr | quote }}
+            {{- end }}
             - name: REDIS_DB
               value: {{ .Values.config.redis.db | quote }}
             - name: BREAKER_FAILURE_THRESHOLD

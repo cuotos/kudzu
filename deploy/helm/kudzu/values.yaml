@@ -14,8 +14,29 @@ config:
   requiredCheckContext: kudzu-gate
   requireReadAuth: false
   redis:
+    # Used only when redis.enabled is false (external Redis). When the bundled
+    # Redis below is enabled, REDIS_ADDR is derived from its Service instead.
     addr: "redis:6379"
     db: 0
+
+# Bundled single-node Redis (Deployment + Service). Convenient for getting
+# started; state is in-memory only (no persistence), so a Redis restart clears
+# all gates. For production, disable this and point config.redis.addr at an
+# external/HA Redis.
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: "7-alpine"
+    pullPolicy: IfNotPresent
+  port: 6379
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
 
 # All secret values are referenced from an existing Kubernetes Secret so they
 # are never templated into the release. Create it out of band, e.g.:
