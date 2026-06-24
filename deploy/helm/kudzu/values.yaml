@@ -1,0 +1,79 @@
+replicaCount: 2
+
+image:
+  repository: ghcr.io/bloomandwild/kudzu
+  tag: ""          # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+service:
+  port: 8080
+
+# Tuning passed through as environment variables.
+config:
+  breakerFailureThreshold: 1
+  requiredCheckContext: kudzu-gate
+  requireReadAuth: false
+  redis:
+    addr: "redis:6379"
+    db: 0
+
+# All secret values are referenced from an existing Kubernetes Secret so they
+# are never templated into the release. Create it out of band, e.g.:
+#   kubectl create secret generic kudzu-secrets \
+#     --from-literal=write-tokens=tokenA,tokenB \
+#     --from-literal=redis-password=... \
+#     --from-file=github-app-private-key=app.pem \
+#     --from-literal=github-app-id=123456 \
+#     --from-literal=github-app-installation-id=7891011
+secrets:
+  # Name of the pre-existing Secret holding the keys below.
+  existingSecret: kudzu-secrets
+  keys:
+    writeTokens: write-tokens
+    redisPassword: redis-password
+    githubAppID: github-app-id
+    githubAppInstallationID: github-app-installation-id
+    githubPrivateKey: github-app-private-key   # mounted as a file
+
+# Proactive merge-group eviction via a GitHub App. When false, a tripped
+# breaker is only caught by the next merge_group gate check.
+github:
+  evictionEnabled: false
+  apiBaseURL: "https://api.github.com/"
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: kudzu.internal.example.com
+  tls: []
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 32Mi
+  limits:
+    cpu: 250m
+    memory: 128Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+# Restrict ingress to the service port. Disabled by default; set namespaceSelectors
+# / podSelectors to match your CI runners and callers.
+networkPolicy:
+  enabled: false
+  ingressFrom: []
+
+# Prometheus Operator ServiceMonitor.
+serviceMonitor:
+  enabled: false
+  interval: 30s
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

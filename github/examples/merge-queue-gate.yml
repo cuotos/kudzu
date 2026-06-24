@@ -1,0 +1,18 @@
+# Copy into a consumer repo as .github/workflows/merge-queue-gate.yml
+# and add "Kudzu Gate" (job: kudzu-gate) as a REQUIRED status check on the
+# branch ruleset that has the merge queue enabled.
+name: Merge Queue Gate
+on:
+  merge_group: {}
+
+jobs:
+  kudzu-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Kudzu deployment gate
+        uses: bloomandwild/kudzu/github@v1
+        with:
+          url: ${{ vars.KUDZU_URL }}
+          service: ${{ github.event.repository.name }}
+          env: production
+          token: ${{ secrets.KUDZU_TOKEN }}   # only required if read auth is enabled

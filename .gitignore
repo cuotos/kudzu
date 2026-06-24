@@ -1,0 +1,7 @@
+/kudzu
+/out/
+*.pem
+.env
+
+# Local AI-assistant scaffolding (AWS AIDLC); kept out of version control.
+.aidlc-rule-details/

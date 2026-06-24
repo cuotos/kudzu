@@ -1,0 +1,6 @@
+.git
+aidlc-docs
+*.md
+deploy/helm
+github
+.aidlc-rule-details

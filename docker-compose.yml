@@ -1,0 +1,28 @@
+# Local end-to-end stack: Kudzu + Redis. GitHub App eviction is left disabled
+# (no app creds), so a tripped breaker is caught by the next gate poll.
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+
+  kudzu:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      KUDZU_ADDR: ":8080"
+      REDIS_ADDR: "redis:6379"
+      KUDZU_WRITE_TOKENS: "local-dev-token"
+      BREAKER_FAILURE_THRESHOLD: "1"
+      REQUIRED_CHECK_CONTEXT: "kudzu-gate"
+    depends_on:
+      redis:
+        condition: service_healthy

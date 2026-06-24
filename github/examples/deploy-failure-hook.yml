@@ -1,0 +1,39 @@
+# Snippet to add to your production deploy workflow (the one that runs on push
+# to the trunk after a merge). It reports the deploy outcome to Kudzu's circuit
+# breaker. On failure the breaker trips: Kudzu proactively evicts in-flight
+# merge groups (if a GitHub App is configured) and the next merge_group gate
+# check blocks anyway.
+name: Deploy
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      KUDZU_URL: ${{ vars.KUDZU_URL }}
+      KUDZU_TOKEN: ${{ secrets.KUDZU_TOKEN }}
+      SERVICE: ${{ github.event.repository.name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to production
+        run: ./deploy.sh    # your real deploy step
+
+      - name: Report deploy result to Kudzu
+        if: always()
+        run: |
+          set -euo pipefail
+          status=$([ "${{ job.status }}" = "success" ] && echo success || echo failed)
+          curl -fsS -X POST "${KUDZU_URL}/v1/deploy-result" \
+            -H "Authorization: Bearer ${KUDZU_TOKEN}" \
+            -H 'content-type: application/json' \
+            -d "$(jq -nc \
+                  --arg service "$SERVICE" \
+                  --arg status  "$status" \
+                  --arg repo    "$GITHUB_REPOSITORY" \
+                  --arg base    "${GITHUB_REF_NAME:-main}" \
+                  --arg sha     "$GITHUB_SHA" \
+                  --arg run     "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+                  '{service:$service, env:"production", status:$status, repo:$repo, base:$base, sha:$sha, run_url:$run}')"

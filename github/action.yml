@@ -1,0 +1,46 @@
+# Composite action that asks Kudzu whether deploys are allowed for a service/env.
+# Drop this into a merge_group-triggered workflow; on a block it exits non-zero,
+# the required check fails, and GitHub ejects the PR from the merge queue.
+name: Kudzu Gate
+description: Block the merge queue when Kudzu reports deploys are not allowed.
+inputs:
+  url:
+    description: Base URL of the Kudzu service (e.g. https://kudzu.internal.example.com)
+    required: true
+  service:
+    description: Service name (gate scope). Defaults to the repository name.
+    required: false
+    default: ${{ github.event.repository.name }}
+  env:
+    description: Environment name (gate scope).
+    required: false
+    default: production
+  token:
+    description: Bearer token for Kudzu (only needed if read auth is enabled).
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Check Kudzu deployment gate
+      shell: bash
+      env:
+        KUDZU_URL: ${{ inputs.url }}
+        SERVICE: ${{ inputs.service }}
+        ENVIRONMENT: ${{ inputs.env }}
+        KUDZU_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+        auth=()
+        [ -n "${KUDZU_TOKEN}" ] && auth=(-H "Authorization: Bearer ${KUDZU_TOKEN}")
+        resp=$(curl -fsS "${auth[@]}" "${KUDZU_URL}/v1/gate?service=${SERVICE}&env=${ENVIRONMENT}")
+        echo "Kudzu: ${resp}"
+        allowed=$(echo "${resp}" | jq -r '.allowed')
+        if [ "${allowed}" = "true" ]; then
+          echo "✅ Kudzu open for ${SERVICE}/${ENVIRONMENT} — proceeding."
+          exit 0
+        fi
+        state=$(echo "${resp}"  | jq -r '.state')
+        reason=$(echo "${resp}" | jq -r '.reason // "no reason given"')
+        echo "::error title=Deploys blocked by Kudzu::${SERVICE}/${ENVIRONMENT} is ${state} (${reason})"
+        exit 1

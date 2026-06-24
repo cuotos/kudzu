@@ -1,0 +1,119 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kudzu.fullname" . }}
+  labels:
+    {{- include "kudzu.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "kudzu.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "kudzu.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: kudzu
+          image: {{ include "kudzu.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+          env:
+            - name: KUDZU_ADDR
+              value: ":{{ .Values.service.port }}"
+            - name: REDIS_ADDR
+              value: {{ .Values.config.redis.addr | quote }}
+            - name: REDIS_DB
+              value: {{ .Values.config.redis.db | quote }}
+            - name: BREAKER_FAILURE_THRESHOLD
+              value: {{ .Values.config.breakerFailureThreshold | quote }}
+            - name: REQUIRED_CHECK_CONTEXT
+              value: {{ .Values.config.requiredCheckContext | quote }}
+            - name: KUDZU_REQUIRE_READ_AUTH
+              value: {{ .Values.config.requireReadAuth | quote }}
+            - name: KUDZU_WRITE_TOKENS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: {{ .Values.secrets.keys.writeTokens }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: {{ .Values.secrets.keys.redisPassword }}
+                  optional: true
+            {{- if .Values.github.evictionEnabled }}
+            - name: GITHUB_API_BASE_URL
+              value: {{ .Values.github.apiBaseURL | quote }}
+            - name: GITHUB_APP_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: {{ .Values.secrets.keys.githubAppID }}
+            - name: GITHUB_APP_INSTALLATION_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: {{ .Values.secrets.keys.githubAppInstallationID }}
+            - name: GITHUB_APP_PRIVATE_KEY_FILE
+              value: /etc/kudzu/github-app-private-key
+            {{- end }}
+          {{- if .Values.github.evictionEnabled }}
+          volumeMounts:
+            - name: github-app-key
+              mountPath: /etc/kudzu
+              readOnly: true
+          {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      {{- if .Values.github.evictionEnabled }}
+      volumes:
+        - name: github-app-key
+          secret:
+            secretName: {{ .Values.secrets.existingSecret }}
+            items:
+              - key: {{ .Values.secrets.keys.githubPrivateKey }}
+                path: github-app-private-key
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
