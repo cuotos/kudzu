@@ -69,6 +69,26 @@ ingress:
   host: kudzu.internal.example.com
   tls: []
 
+# Gateway API HTTPRoute — an alternative to ingress for clusters fronted by an
+# API gateway / Gateway API controller. Enable exactly one of ingress or
+# httpRoute. Requires the Gateway API CRDs (gateway.networking.k8s.io/v1) and a
+# Gateway to attach to, referenced via parentRefs.
+httpRoute:
+  enabled: false
+  annotations: {}
+  # The Gateway(s) this route attaches to. At least one entry is required when
+  # enabled. namespace/sectionName are optional.
+  parentRefs:
+    - name: ""
+      # namespace: gateway-system
+      # sectionName: https
+  # Hostnames this route matches. Empty means match all hosts on the Gateway.
+  hostnames:
+    - kudzu.internal.example.com
+  # Match rule for the single backend route to the service.
+  path: /
+  pathType: PathPrefix
+
 resources:
   requests:
     cpu: 25m
