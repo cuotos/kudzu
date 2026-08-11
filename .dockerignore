@@ -1,7 +1,12 @@
 # .git is deliberately NOT ignored: `go build` stamps vcs.revision/vcs.time into
 # the binary only when it can see the repository, and /versionz reports them.
+#
+# For the same reason, nothing tracked by git may be ignored here. Excluding a
+# tracked path makes git inside the build see it as deleted, which stamps
+# vcs.modified=true and makes /versionz report every release as a dirty build.
+# Only untracked paths belong below. Note that git inside the build cannot see
+# your global gitignore, so a directory ignored on your machine still shows up
+# as untracked there and must be listed here.
 aidlc-docs
-*.md
-deploy/helm
-github
 .aidlc-rule-details
+.claude
