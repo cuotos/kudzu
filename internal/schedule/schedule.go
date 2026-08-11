@@ -40,36 +40,54 @@ func (s Schedule) Valid() bool {
 	}
 }
 
+// Window is one concrete occurrence of a Schedule: the interval
+// [Start, End) that a recurring or one-off window resolved to.
+type Window struct {
+	Schedule Schedule
+	Start    time.Time
+	End      time.Time
+}
+
 // IsActiveAt reports whether the window contains now.
 func (s Schedule) IsActiveAt(now time.Time) bool {
+	_, ok := s.WindowAt(now)
+	return ok
+}
+
+// WindowAt returns the occurrence of s containing now, if any. Callers use the
+// bounds to report when a freeze started and when it lifts.
+func (s Schedule) WindowAt(now time.Time) (Window, bool) {
 	if s.Start != nil && s.End != nil {
-		return !now.Before(*s.Start) && now.Before(*s.End)
+		if !now.Before(*s.Start) && now.Before(*s.End) {
+			return Window{Schedule: s, Start: *s.Start, End: *s.End}, true
+		}
+		return Window{}, false
 	}
 	if s.Cron != "" && s.Duration > 0 {
 		spec, err := cronParser.Parse(s.Cron)
 		if err != nil {
-			return false
+			return Window{}, false
 		}
 		// Find the latest activation at or before now and check whether the
 		// window it opened still contains now. Next() returns the first fire
 		// strictly after its argument, so seed it just before (now-Duration).
 		t := spec.Next(now.Add(-s.Duration - time.Nanosecond))
 		for !t.After(now) { // t <= now
-			if now.Before(t.Add(s.Duration)) {
-				return true
+			if end := t.Add(s.Duration); now.Before(end) {
+				return Window{Schedule: s, Start: t, End: end}, true
 			}
 			t = spec.Next(t)
 		}
 	}
-	return false
+	return Window{}, false
 }
 
-// ActiveWindow returns the first schedule active at now, if any.
-func ActiveWindow(schedules []Schedule, now time.Time) (Schedule, bool) {
+// ActiveWindow returns the occurrence of the first schedule active at now.
+func ActiveWindow(schedules []Schedule, now time.Time) (Window, bool) {
 	for _, s := range schedules {
-		if s.IsActiveAt(now) {
-			return s, true
+		if w, ok := s.WindowAt(now); ok {
+			return w, true
 		}
 	}
-	return Schedule{}, false
+	return Window{}, false
 }

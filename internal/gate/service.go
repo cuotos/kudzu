@@ -213,12 +213,51 @@ func (s *Service) AddSchedule(ctx context.Context, k Key, sc schedule.Schedule) 
 	return nil
 }
 
-// ListSchedules returns the freeze windows for a key.
-func (s *Service) ListSchedules(ctx context.Context, k Key) ([]schedule.Schedule, error) {
+// ListSchedules returns the freeze windows for a key, annotated with whether
+// each one is in force right now.
+func (s *Service) ListSchedules(ctx context.Context, k Key) ([]ScheduleEntry, error) {
 	if !k.valid() {
 		return nil, ErrInvalidKey
 	}
-	return s.store.ListSchedules(ctx, k)
+	scs, err := s.store.ListSchedules(ctx, k)
+	if err != nil {
+		return nil, fmt.Errorf("list schedules: %w", err)
+	}
+	return s.annotate(k, scs), nil
+}
+
+// ListAllSchedules returns the freeze windows of every known gate, annotated
+// the same way. Gates with no windows contribute nothing.
+func (s *Service) ListAllSchedules(ctx context.Context) ([]ScheduleEntry, error) {
+	keys, err := s.store.ListKeys(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list keys: %w", err)
+	}
+	out := []ScheduleEntry{}
+	for _, k := range keys {
+		scs, err := s.store.ListSchedules(ctx, k)
+		if err != nil {
+			return nil, fmt.Errorf("list schedules for %s/%s: %w", k.Service, k.Env, err)
+		}
+		out = append(out, s.annotate(k, scs)...)
+	}
+	return out, nil
+}
+
+// annotate pairs each schedule with its gate and resolves the occurrence
+// containing now, if any.
+func (s *Service) annotate(k Key, scs []schedule.Schedule) []ScheduleEntry {
+	now := s.now()
+	out := make([]ScheduleEntry, 0, len(scs))
+	for _, sc := range scs {
+		e := ScheduleEntry{Service: k.Service, Env: k.Env, Schedule: sc}
+		if w, ok := sc.WindowAt(now); ok {
+			start, end := w.Start, w.End
+			e.Active, e.Since, e.Until = true, &start, &end
+		}
+		out = append(out, e)
+	}
+	return out
 }
 
 // DeleteSchedule removes a freeze window by id.

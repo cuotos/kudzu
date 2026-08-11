@@ -112,7 +112,10 @@ The only place where concrete implementations are chosen and wired together.
 - **Ports:** `Store` (persistence) and `Evicter` (GitHub merge-queue eviction),
   plus `NoopEvicter`.
 - `Effective(k, freeze, breaker, schedules, now) Gate` — the **pure function**
-  that applies the precedence rules. No I/O; trivially unit-testable.
+  that applies the precedence rules. No I/O; trivially unit-testable. It also
+  fills `Gate.ExpiresAt` when the state lapses by itself (a freeze TTL, or the
+  end of the active schedule window), leaving it nil for a trip or an
+  open-ended freeze.
 
 **`service.go`** — the business logic; the only thing handlers talk to.
 - `Service` holds the `Store`, `Evicter`, `Config`, logger, plus injectable
@@ -120,7 +123,12 @@ The only place where concrete implementations are chosen and wired together.
 - `NewService` applies defaults (`FailureThreshold` ≥ 1, `CheckContext` =
   `kudzu-gate`).
 - Read methods: `Get` (load freeze+breaker+schedules, run `Effective`), `List`
-  (fan out over `ListKeys`), `ListSchedules`, `Ping`.
+  (fan out over `ListKeys`), `ListSchedules` (one gate), `ListAllSchedules`
+  (fan out over `ListKeys`), `Ping`. Both schedule listings return
+  `ScheduleEntry` — the stored window plus its gate and, via `annotate`, whether
+  it is in force now and the bounds of that occurrence.
+- Schedules are stored **per gate**, so `DeleteSchedule` needs the key as well as
+  the id: the id addresses a field within that gate's collection.
 - Write methods: `Freeze`, `Unfreeze` (clears freeze **and** resets the breaker),
   `RecordDeploy` (the breaker logic: count failures, trip at threshold, reset on
   success), `AddSchedule`/`DeleteSchedule`.
@@ -138,10 +146,16 @@ precedence, eviction wiring).
 - `Schedule` — either a one-off `[Start, End)` interval or a recurring
   `Cron`+`Duration` window.
 - `Valid()` checks well-formedness (and that the cron parses).
-- `IsActiveAt(now)` — for cron windows, walks back to the latest activation at/
-  before `now` and checks whether its `Duration` still covers `now`.
-- `ActiveWindow(schedules, now)` — returns the first active window.
-- Uses `robfig/cron/v3` with the standard 5-field parser.
+- `Window` — one concrete occurrence of a `Schedule`, as the resolved
+  `[Start, End)` interval.
+- `WindowAt(now)` — the occurrence containing `now`. For cron windows it walks
+  back to the latest activation at/before `now` and checks whether its
+  `Duration` still covers `now`, returning that activation and its end.
+- `IsActiveAt(now)` — the boolean form, delegating to `WindowAt`.
+- `ActiveWindow(schedules, now)` — the first active occurrence. `gate.Effective`
+  uses its bounds for the gate's `since` and `expires_at`.
+- Uses `robfig/cron/v3` with the standard 5-field parser — no seconds field and
+  no `@daily`-style descriptors, so `* * * * *` is the minimum valid form.
 
 **`schedule_test.go`** — table tests for one-off and recurring windows.
 

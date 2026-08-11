@@ -24,8 +24,10 @@ var dashboardTmpl = template.Must(template.ParseFS(uiFS, "templates/dashboard.ht
 // timestamps, so the template stays logic-free.
 type uiGate struct {
 	gate.Gate
-	Age   string // "12m ago"; empty when the gate has no since
-	Stamp string // absolute timestamp, shown on hover
+	Age          string // "12m ago"; empty when the gate has no since
+	Stamp        string // absolute timestamp, shown on hover
+	Expires      string // "in 42m"; empty when the state has no TTL
+	ExpiresStamp string // absolute expiry, shown on hover
 }
 
 // uiData is the dashboard view model.
@@ -82,6 +84,10 @@ func buildDashboard(gates []gate.Gate, now time.Time) uiData {
 			row.Age = age(now.Sub(g.Since))
 			row.Stamp = g.Since.Format(time.RFC1123)
 		}
+		if g.ExpiresAt != nil {
+			row.Expires = remaining(g.ExpiresAt.Sub(now))
+			row.ExpiresStamp = g.ExpiresAt.Format(time.RFC1123)
+		}
 		if g.Allowed {
 			d.Open = append(d.Open, row)
 			continue
@@ -117,7 +123,7 @@ func buildDashboard(gates []gate.Gate, now time.Time) uiData {
 	return d
 }
 
-// age renders a duration as a short relative label.
+// age renders an elapsed duration as a short relative label.
 func age(d time.Duration) string {
 	switch {
 	case d < time.Minute:
@@ -128,5 +134,22 @@ func age(d time.Duration) string {
 		return fmt.Sprintf("%dh ago", int(d.Hours()))
 	default:
 		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	}
+}
+
+// remaining renders time left as a short forward-looking label. A TTL that has
+// passed but whose gate is still listed means the board caught it mid-lapse.
+func remaining(d time.Duration) string {
+	switch {
+	case d <= 0:
+		return "any moment"
+	case d < time.Minute:
+		return "in under a minute"
+	case d < time.Hour:
+		return fmt.Sprintf("in %dm", int(d.Minutes()))
+	case d < 48*time.Hour:
+		return fmt.Sprintf("in %dh", int(d.Hours()))
+	default:
+		return fmt.Sprintf("in %dd", int(d.Hours()/24))
 	}
 }

@@ -47,6 +47,10 @@ type Gate struct {
 	Source  Source    `json:"source,omitempty"`
 	Since   time.Time `json:"since,omitzero"`
 	Actor   string    `json:"actor,omitempty"`
+	// ExpiresAt is when the current state lapses on its own: a manual freeze's
+	// TTL, or the end of the active schedule window. Nil means it holds until
+	// something clears it, as a trip or an open-ended freeze does.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
 // Freeze is a manual freeze record. A nil *Freeze means no manual freeze.
@@ -85,6 +89,20 @@ type AuditEntry struct {
 	Event  string    `json:"event"`
 	Actor  string    `json:"actor,omitempty"`
 	Detail string    `json:"detail,omitempty"`
+}
+
+// ScheduleEntry is a stored freeze window together with the gate it belongs to
+// and whether it is in force right now. The schedule's own fields are inlined,
+// so a client reading a bare schedule still sees what it expects.
+type ScheduleEntry struct {
+	Service string `json:"service"`
+	Env     string `json:"env"`
+	schedule.Schedule
+	// Active reports whether the window contains the evaluation time.
+	Active bool `json:"active"`
+	// Since and Until bound the current occurrence; set only when Active.
+	Since *time.Time `json:"since,omitempty"`
+	Until *time.Time `json:"until,omitempty"`
 }
 
 // DeployResult is the circuit-breaker input reported by a deploy pipeline.
@@ -149,13 +167,13 @@ func Effective(k Key, f *Freeze, b *Breaker, schedules []schedule.Schedule, now 
 	case f.ActiveAt(now):
 		g.State, g.Allowed, g.Source = StateFrozen, false, SourceManual
 		g.Reason, g.Since, g.Actor = f.Reason, f.Since, f.Actor
+		g.ExpiresAt = f.ExpiresAt
 	default:
 		if win, ok := schedule.ActiveWindow(schedules, now); ok {
 			g.State, g.Allowed, g.Source = StateFrozen, false, SourceSchedule
-			g.Reason = win.Reason
-			if win.Start != nil {
-				g.Since = *win.Start
-			}
+			g.Reason = win.Schedule.Reason
+			g.Since = win.Start
+			g.ExpiresAt = &win.End
 		}
 	}
 	return g

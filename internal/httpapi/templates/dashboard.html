@@ -231,6 +231,7 @@
           {{if .Source}}<div><dt>source</dt><dd>{{.Source}}</dd></div>{{end}}
           {{if .Actor}}<div><dt>by</dt><dd>{{.Actor}}</dd></div>{{end}}
           {{if .Age}}<div><dt>since</dt><dd><span title="{{.Stamp}}">{{.Age}}</span></dd></div>{{end}}
+          {{if .Expires}}<div><dt>lifts</dt><dd><span title="{{.ExpiresStamp}}">{{.Expires}}</span></dd></div>{{end}}
         </dl>
       </article>
       {{end}}

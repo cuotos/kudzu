@@ -1,7 +1,11 @@
 package gate
 
 import (
+	"cmp"
 	"context"
+	"fmt"
+	"maps"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -73,8 +77,29 @@ func (s *fakeStore) AddSchedule(_ context.Context, k Key, sc schedule.Schedule) 
 	return nil
 }
 func (s *fakeStore) DeleteSchedule(_ context.Context, k Key, id string) error { return nil }
+
+// ListKeys reports every key the fake holds anything for, like the real stores
+// which register a key on each write. Sorted so tests see a stable order.
 func (s *fakeStore) ListKeys(_ context.Context) ([]Key, error) {
-	return []Key{{Service: "orders", Env: "production"}}, nil
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	seen := map[Key]bool{}
+	for k := range s.freeze {
+		seen[k] = true
+	}
+	for k := range s.breaker {
+		seen[k] = true
+	}
+	for k := range s.schedules {
+		seen[k] = true
+	}
+	keys := slices.SortedFunc(maps.Keys(seen), func(a, b Key) int {
+		if c := cmp.Compare(a.Service, b.Service); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.Env, b.Env)
+	})
+	return keys, nil
 }
 func (s *fakeStore) AppendAudit(_ context.Context, _ Key, e AuditEntry) error {
 	s.mu.Lock()
@@ -173,8 +198,23 @@ func TestFreezeTTLExpiry(t *testing.T) {
 	if _, err := svc.Freeze(ctx, k, "short", "dan", time.Hour); err != nil {
 		t.Fatal(err)
 	}
-	if g, _ := svc.Get(ctx, k); g.State != StateFrozen {
+	g, _ := svc.Get(ctx, k)
+	if g.State != StateFrozen {
 		t.Fatalf("want frozen within ttl, got %s", g.State)
+	}
+	// The TTL is surfaced on the effective gate so callers can show when it lifts.
+	if g.ExpiresAt == nil || !g.ExpiresAt.Equal(clock.Add(time.Hour)) {
+		t.Fatalf("ExpiresAt = %v, want %v", g.ExpiresAt, clock.Add(time.Hour))
+	}
+	// A freeze with no TTL reports no expiry.
+	if _, err := svc.Freeze(ctx, k, "indefinite", "dan", 0); err != nil {
+		t.Fatal(err)
+	}
+	if g, _ := svc.Get(ctx, k); g.ExpiresAt != nil {
+		t.Fatalf("ExpiresAt = %v, want nil", g.ExpiresAt)
+	}
+	if _, err := svc.Freeze(ctx, k, "short", "dan", time.Hour); err != nil {
+		t.Fatal(err)
 	}
 	// Advance the clock past the TTL.
 	svc.now = func() time.Time { return clock.Add(2 * time.Hour) }
@@ -237,5 +277,42 @@ func TestScheduleMakesGateFrozen(t *testing.T) {
 	g, _ := svc.Get(ctx, k)
 	if g.State != StateFrozen || g.Source != SourceSchedule {
 		t.Fatalf("want scheduled freeze, got state=%s src=%s", g.State, g.Source)
+	}
+	// The gate reports the window it is inside, so callers can say when it lifts.
+	if !g.Since.Equal(clock.Add(-time.Minute)) {
+		t.Errorf("Since = %s, want %s", g.Since, clock.Add(-time.Minute))
+	}
+	if g.ExpiresAt == nil || !g.ExpiresAt.Equal(clock.Add(time.Minute)) {
+		t.Errorf("ExpiresAt = %v, want %v", g.ExpiresAt, clock.Add(time.Minute))
+	}
+}
+
+func TestRecurringScheduleReportsOccurrenceBounds(t *testing.T) {
+	svc, _ := newTestService(t, nil, Config{})
+	ctx := context.Background()
+
+	// A window opening on the hour and held for 90 minutes; clock sits inside it.
+	start := clock.Truncate(time.Hour)
+	svc.now = func() time.Time { return start.Add(30 * time.Minute) }
+	sc := schedule.Schedule{
+		ID:       "hourly",
+		Cron:     fmt.Sprintf("%d * * * *", start.Minute()),
+		Duration: 90 * time.Minute,
+		Reason:   "batch run",
+	}
+	if err := svc.AddSchedule(ctx, k, sc); err != nil {
+		t.Fatal(err)
+	}
+
+	g, _ := svc.Get(ctx, k)
+	if g.State != StateFrozen || g.Reason != "batch run" {
+		t.Fatalf("want frozen by the window, got state=%s reason=%q", g.State, g.Reason)
+	}
+	// A cron window used to report no start at all; now both bounds resolve.
+	if !g.Since.Equal(start) {
+		t.Errorf("Since = %s, want %s", g.Since, start)
+	}
+	if g.ExpiresAt == nil || !g.ExpiresAt.Equal(start.Add(90*time.Minute)) {
+		t.Errorf("ExpiresAt = %v, want %v", g.ExpiresAt, start.Add(90*time.Minute))
 	}
 }

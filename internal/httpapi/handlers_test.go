@@ -3,10 +3,12 @@ package httpapi
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/cuotos/kudzu/internal/gate"
 	"github.com/cuotos/kudzu/internal/store/memory"
@@ -124,6 +126,92 @@ func TestScheduleCRUDOverHTTP(t *testing.T) {
 	rec, _ = do(t, h, http.MethodDelete, "/v1/schedules/"+id+"?service=orders&env=production", testToken, nil)
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("delete schedule: code=%d", rec.Code)
+	}
+}
+
+func TestListAllSchedulesOverHTTP(t *testing.T) {
+	h := newTestRouter()
+	now := time.Now()
+
+	// An inactive window on one gate, an active one on another.
+	rec, _ := do(t, h, http.MethodPost, "/v1/schedules", testToken, map[string]any{
+		"service": "orders", "env": "production",
+		"cron": "0 14 * * 5", "duration_seconds": 14400, "reason": "friday freeze",
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("add recurring: code=%d", rec.Code)
+	}
+	rec, _ = do(t, h, http.MethodPost, "/v1/schedules", testToken, map[string]any{
+		"service": "billing", "env": "staging", "reason": "migration",
+		"start": now.Add(-time.Hour).Format(time.RFC3339),
+		"end":   now.Add(time.Hour).Format(time.RFC3339),
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("add one-off: code=%d", rec.Code)
+	}
+
+	// No service/env: every window Kudzu knows about.
+	rec, body := do(t, h, http.MethodGet, "/v1/schedules", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list all: code=%d body=%v", rec.Code, body)
+	}
+	entries, _ := body["schedules"].([]any)
+	if len(entries) != 2 {
+		t.Fatalf("got %d entries, want 2: %v", len(entries), body)
+	}
+
+	byGate := map[string]map[string]any{}
+	for _, e := range entries {
+		m, _ := e.(map[string]any)
+		byGate[fmt.Sprintf("%v/%v", m["service"], m["env"])] = m
+	}
+
+	active, ok := byGate["billing/staging"]
+	if !ok {
+		t.Fatalf("missing billing/staging in %v", byGate)
+	}
+	if active["active"] != true {
+		t.Errorf("billing/staging active = %v, want true", active["active"])
+	}
+	// An active entry reports the bounds of the occurrence it is inside.
+	if active["since"] == nil || active["until"] == nil {
+		t.Errorf("active entry missing bounds: %v", active)
+	}
+	// The schedule's own fields stay inlined, so existing readers still work.
+	if active["reason"] != "migration" || active["id"] == nil {
+		t.Errorf("schedule fields not inlined: %v", active)
+	}
+
+	inactive, ok := byGate["orders/production"]
+	if !ok {
+		t.Fatalf("missing orders/production in %v", byGate)
+	}
+	if inactive["active"] != false {
+		t.Errorf("orders/production active = %v, want false", inactive["active"])
+	}
+	if inactive["since"] != nil || inactive["until"] != nil {
+		t.Errorf("inactive entry should have no bounds: %v", inactive)
+	}
+}
+
+func TestListAllSchedulesEmptyIsAnArray(t *testing.T) {
+	h := newTestRouter()
+	rec, body := do(t, h, http.MethodGet, "/v1/schedules", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d", rec.Code)
+	}
+	// An empty list must marshal as [] rather than null.
+	if scs, ok := body["schedules"].([]any); !ok || len(scs) != 0 {
+		t.Fatalf("schedules = %#v, want an empty array", body["schedules"])
+	}
+}
+
+func TestListSchedulesRejectsHalfAKey(t *testing.T) {
+	h := newTestRouter()
+	for _, q := range []string{"?service=orders", "?env=production"} {
+		if rec, _ := do(t, h, http.MethodGet, "/v1/schedules"+q, "", nil); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: code=%d, want 400", q, rec.Code)
+		}
 	}
 }
 

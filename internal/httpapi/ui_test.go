@@ -140,6 +140,90 @@ func TestBuildDashboardOrdersAndSummarises(t *testing.T) {
 	}
 }
 
+func TestDashboardShowsFreezeTTL(t *testing.T) {
+	h := newTestRouter()
+
+	// A freeze with a TTL, and one without.
+	do(t, h, http.MethodPost, "/v1/gate/freeze", testToken, map[string]any{
+		"service": "orders", "env": "production", "reason": "release train",
+		"actor": "dan", "ttl_seconds": 5400,
+	})
+	do(t, h, http.MethodPost, "/v1/gate/freeze", testToken, map[string]any{
+		"service": "billing", "env": "production", "reason": "incident", "actor": "dan",
+	})
+
+	_, body := getHTML(t, h, "/ui", "")
+	if !strings.Contains(body, "in 1h") {
+		t.Errorf("expected the TTL to be rendered, got:\n%s", body)
+	}
+	// One card has a TTL, the other must not grow an empty row for it.
+	if got := strings.Count(body, "<dt>lifts</dt>"); got != 1 {
+		t.Errorf("lifts rows = %d, want 1", got)
+	}
+}
+
+func TestDashboardShowsScheduleWindowEnd(t *testing.T) {
+	h := newTestRouter()
+	now := time.Now()
+
+	rec, _ := do(t, h, http.MethodPost, "/v1/schedules", testToken, map[string]any{
+		"service": "orders", "env": "production", "reason": "release train",
+		"start": now.Add(-10 * time.Minute).Format(time.RFC3339),
+		// Half a minute of slack so the rendered "in 50m" does not depend on how
+		// long the test takes to reach the render.
+		"end": now.Add(50*time.Minute + 30*time.Second).Format(time.RFC3339),
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("add schedule: code=%d", rec.Code)
+	}
+
+	_, body := getHTML(t, h, "/ui", "")
+	for _, want := range []string{"schedule", "release train", "<dt>lifts</dt>", "in 50m"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("dashboard missing %q", want)
+		}
+	}
+}
+
+func TestBuildDashboardFormatsTTL(t *testing.T) {
+	now := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
+	exp := now.Add(42 * time.Minute)
+	d := buildDashboard([]gate.Gate{
+		{Service: "orders", Env: "production", State: gate.StateFrozen,
+			Source: gate.SourceManual, Since: now, ExpiresAt: &exp},
+		{Service: "web", Env: "production", State: gate.StateTripped, Source: gate.SourceBreaker, Since: now},
+	}, now)
+
+	if d.Blocked[0].Expires != "in 42m" {
+		t.Errorf("Expires = %q, want in 42m", d.Blocked[0].Expires)
+	}
+	if d.Blocked[0].ExpiresStamp == "" {
+		t.Error("expected an absolute expiry for the hover title")
+	}
+	// A trip has no TTL, so it must stay empty rather than render a zero time.
+	if d.Blocked[1].Expires != "" {
+		t.Errorf("tripped gate got Expires = %q", d.Blocked[1].Expires)
+	}
+}
+
+func TestRemainingLabels(t *testing.T) {
+	cases := []struct {
+		d    time.Duration
+		want string
+	}{
+		{-time.Minute, "any moment"},
+		{30 * time.Second, "in under a minute"},
+		{45 * time.Minute, "in 45m"},
+		{5 * time.Hour, "in 5h"},
+		{96 * time.Hour, "in 4d"},
+	}
+	for _, c := range cases {
+		if got := remaining(c.d); got != c.want {
+			t.Errorf("remaining(%s) = %q, want %q", c.d, got, c.want)
+		}
+	}
+}
+
 func TestAgeLabels(t *testing.T) {
 	cases := []struct {
 		d    time.Duration
