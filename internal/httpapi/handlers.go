@@ -22,7 +22,8 @@ type GateService interface {
 	Unfreeze(ctx context.Context, k gate.Key, actor string) (gate.Gate, error)
 	RecordDeploy(ctx context.Context, r gate.DeployResult) (gate.Gate, error)
 	AddSchedule(ctx context.Context, k gate.Key, s schedule.Schedule) error
-	ListSchedules(ctx context.Context, k gate.Key) ([]schedule.Schedule, error)
+	ListSchedules(ctx context.Context, k gate.Key) ([]gate.ScheduleEntry, error)
+	ListAllSchedules(ctx context.Context) ([]gate.ScheduleEntry, error)
 	DeleteSchedule(ctx context.Context, k gate.Key, id string) error
 	Ping(ctx context.Context) error
 }
@@ -151,14 +152,28 @@ func (s *Server) handleAddSchedule(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, sc)
 }
 
+// handleListSchedules lists freeze windows for one gate, or — with no service
+// and no env — every window Kudzu knows about. Each entry says whether it is in
+// force right now.
 func (s *Server) handleListSchedules(w http.ResponseWriter, r *http.Request) {
 	k := gate.Key{Service: r.URL.Query().Get("service"), Env: r.URL.Query().Get("env")}
-	scs, err := s.svc.ListSchedules(r.Context(), k)
+
+	var (
+		entries []gate.ScheduleEntry
+		err     error
+	)
+	if k.Service == "" && k.Env == "" {
+		entries, err = s.svc.ListAllSchedules(r.Context())
+	} else {
+		// A half-specified key is a mistake, not a request for everything, so
+		// this path still rejects it via ErrInvalidKey.
+		entries, err = s.svc.ListSchedules(r.Context(), k)
+	}
 	if err != nil {
 		s.writeServiceErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"schedules": scs})
+	writeJSON(w, http.StatusOK, map[string]any{"schedules": entries})
 }
 
 func (s *Server) handleDeleteSchedule(w http.ResponseWriter, r *http.Request) {

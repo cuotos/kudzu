@@ -123,7 +123,12 @@ The only place where concrete implementations are chosen and wired together.
 - `NewService` applies defaults (`FailureThreshold` ≥ 1, `CheckContext` =
   `kudzu-gate`).
 - Read methods: `Get` (load freeze+breaker+schedules, run `Effective`), `List`
-  (fan out over `ListKeys`), `ListSchedules`, `Ping`.
+  (fan out over `ListKeys`), `ListSchedules` (one gate), `ListAllSchedules`
+  (fan out over `ListKeys`), `Ping`. Both schedule listings return
+  `ScheduleEntry` — the stored window plus its gate and, via `annotate`, whether
+  it is in force now and the bounds of that occurrence.
+- Schedules are stored **per gate**, so `DeleteSchedule` needs the key as well as
+  the id: the id addresses a field within that gate's collection.
 - Write methods: `Freeze`, `Unfreeze` (clears freeze **and** resets the breaker),
   `RecordDeploy` (the breaker logic: count failures, trip at threshold, reset on
   success), `AddSchedule`/`DeleteSchedule`.

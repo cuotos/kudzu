@@ -42,10 +42,69 @@ func TestAddScheduleInvalid(t *testing.T) {
 	}
 }
 
+func TestListAllSchedulesSpansGates(t *testing.T) {
+	svc, _ := newTestService(t, nil, Config{})
+	ctx := context.Background()
+
+	other := Key{Service: "billing", Env: "staging"}
+	live := schedule.Schedule{ID: "live", Start: tp(clock.Add(-time.Hour)), End: tp(clock.Add(time.Hour))}
+	past := schedule.Schedule{ID: "past", Start: tp(clock.Add(-48 * time.Hour)), End: tp(clock.Add(-47 * time.Hour))}
+	for _, sc := range []schedule.Schedule{live, past} {
+		if err := svc.AddSchedule(ctx, k, sc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := svc.AddSchedule(ctx, other, live); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := svc.ListAllSchedules(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 3 {
+		t.Fatalf("got %d entries, want 3: %+v", len(entries), entries)
+	}
+
+	var activeCount, gates int
+	seen := map[Key]bool{}
+	for _, e := range entries {
+		if e.Active {
+			activeCount++
+			if e.Since == nil || e.Until == nil {
+				t.Errorf("active entry %s has no bounds", e.ID)
+			}
+		} else if e.Since != nil || e.Until != nil {
+			t.Errorf("inactive entry %s carries bounds", e.ID)
+		}
+		if key := (Key{Service: e.Service, Env: e.Env}); !seen[key] {
+			seen[key] = true
+			gates++
+		}
+	}
+	if activeCount != 2 {
+		t.Errorf("active = %d, want 2 (the past window is not in force)", activeCount)
+	}
+	if gates != 2 {
+		t.Errorf("entries span %d gates, want 2", gates)
+	}
+}
+
+func TestListAllSchedulesIsEmptyNotNil(t *testing.T) {
+	svc, _ := newTestService(t, nil, Config{})
+	entries, err := svc.ListAllSchedules(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entries == nil || len(entries) != 0 {
+		t.Fatalf("entries = %#v, want an empty non-nil slice", entries)
+	}
+}
+
 func TestListReturnsEffectiveGates(t *testing.T) {
 	svc, _ := newTestService(t, nil, Config{})
 	ctx := context.Background()
-	// fakeStore.ListKeys always reports orders/production; freeze it.
+	// The store only knows a key once something is written for it.
 	if _, err := svc.Freeze(ctx, k, "incident", "dan", 0); err != nil {
 		t.Fatal(err)
 	}

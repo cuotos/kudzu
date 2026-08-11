@@ -1,8 +1,11 @@
 package gate
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -74,8 +77,29 @@ func (s *fakeStore) AddSchedule(_ context.Context, k Key, sc schedule.Schedule) 
 	return nil
 }
 func (s *fakeStore) DeleteSchedule(_ context.Context, k Key, id string) error { return nil }
+
+// ListKeys reports every key the fake holds anything for, like the real stores
+// which register a key on each write. Sorted so tests see a stable order.
 func (s *fakeStore) ListKeys(_ context.Context) ([]Key, error) {
-	return []Key{{Service: "orders", Env: "production"}}, nil
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	seen := map[Key]bool{}
+	for k := range s.freeze {
+		seen[k] = true
+	}
+	for k := range s.breaker {
+		seen[k] = true
+	}
+	for k := range s.schedules {
+		seen[k] = true
+	}
+	keys := slices.SortedFunc(maps.Keys(seen), func(a, b Key) int {
+		if c := cmp.Compare(a.Service, b.Service); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.Env, b.Env)
+	})
+	return keys, nil
 }
 func (s *fakeStore) AppendAudit(_ context.Context, _ Key, e AuditEntry) error {
 	s.mu.Lock()

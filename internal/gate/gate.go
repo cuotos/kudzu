@@ -91,6 +91,20 @@ type AuditEntry struct {
 	Detail string    `json:"detail,omitempty"`
 }
 
+// ScheduleEntry is a stored freeze window together with the gate it belongs to
+// and whether it is in force right now. The schedule's own fields are inlined,
+// so a client reading a bare schedule still sees what it expects.
+type ScheduleEntry struct {
+	Service string `json:"service"`
+	Env     string `json:"env"`
+	schedule.Schedule
+	// Active reports whether the window contains the evaluation time.
+	Active bool `json:"active"`
+	// Since and Until bound the current occurrence; set only when Active.
+	Since *time.Time `json:"since,omitempty"`
+	Until *time.Time `json:"until,omitempty"`
+}
+
 // DeployResult is the circuit-breaker input reported by a deploy pipeline.
 type DeployResult struct {
 	Service string `json:"service"`

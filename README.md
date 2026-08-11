@@ -38,7 +38,7 @@ Read (token optional, controlled by `KUDZU_REQUIRE_READ_AUTH`):
 |---|---|
 | `GET /v1/gate?service=&env=` | Effective gate for one service/env (`{state, allowed, reason, source, since, actor, expires_at}`). `expires_at` is set when the state lapses on its own — a freeze TTL or the end of the active schedule window — and absent for a trip or an open-ended freeze. The merge-queue check reads `.allowed`. |
 | `GET /v1/gates` | All known gates (dashboard). |
-| `GET /v1/schedules?service=&env=` | List freeze windows. |
+| `GET /v1/schedules` | Every freeze window Kudzu knows about, across all gates. Each entry carries its `service`/`env`, an `active` flag, and `since`/`until` bounds while active. Pass `?service=&env=` to narrow it to one gate. |
 | `GET /` and `GET /ui` | The gate board — a read-only HTML dashboard (see below). |
 | `GET /healthz` / `GET /readyz` / `GET /metrics` | Liveness / readiness (pings Redis) / Prometheus. |
 
