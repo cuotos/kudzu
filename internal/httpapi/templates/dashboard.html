@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>kudzu — gate board</title>
+<style>
+  :root {
+    --ground: #eef1e9;
+    --panel: #fbfcf9;
+    --ink: #141a15;
+    --ink-soft: #5c6a5e;
+    --rule: #d2d9cc;
+    --open: #2f6b3f;
+    --frozen: #2a5f92;
+    --tripped: #ad3220;
+    --accent: var(--open);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0f140f;
+      --panel: #161d17;
+      --ink: #e7ece5;
+      --ink-soft: #92a094;
+      --rule: #28312a;
+      --open: #6ab47e;
+      --frozen: #78abd9;
+      --tripped: #e3775f;
+    }
+  }
+
+  /* The board's accent is the worst state present, so the whole page reads
+     open / frozen / tripped from across the room. */
+  [data-mood="frozen"] { --accent: var(--frozen); }
+  [data-mood="tripped"] { --accent: var(--tripped); }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.45;
+  }
+  .shell { max-width: 64rem; margin: 0 auto; padding: 0 1.25rem 4rem; }
+
+  /* --- top bar --- */
+  .bar {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    padding: 1.1rem 0 1rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  .wordmark {
+    font-family: var(--mono);
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .wordmark::after {
+    content: "";
+    display: inline-block;
+    width: 0.4rem;
+    height: 0.4rem;
+    margin-left: 0.5rem;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: breathe 4s ease-in-out infinite;
+  }
+  @keyframes breathe { 50% { opacity: 0.25; } }
+  @media (prefers-reduced-motion: reduce) {
+    .wordmark::after { animation: none; }
+  }
+  .bar-meta { color: var(--ink-soft); font-size: 0.8rem; }
+  .bar-stamp {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+
+  /* --- the verdict: the one loud thing on the page --- */
+  .verdict {
+    padding: 3.5rem 0 3rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  .verdict-count {
+    margin: 0;
+    font-size: clamp(4.5rem, 15vw, 9.5rem);
+    font-weight: 800;
+    letter-spacing: -0.05em;
+    line-height: 0.8;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+  .verdict-word {
+    margin: 1.1rem 0 0;
+    font-size: clamp(0.85rem, 2.4vw, 1.05rem);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    color: var(--accent);
+  }
+  .verdict-sub {
+    margin: 0.9rem 0 0;
+    max-width: 34rem;
+    color: var(--ink-soft);
+    font-size: 0.9rem;
+  }
+
+  /* --- blocked gates: solid, unmissable --- */
+  .blocked { display: grid; gap: 0.6rem; padding: 2rem 0 0; }
+  .gate {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.35rem 1.5rem;
+    padding: 1.1rem 1.25rem 1.15rem;
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-left: 4px solid var(--accent);
+    border-radius: 2px;
+  }
+  .gate--frozen { --accent: var(--frozen); }
+  .gate--tripped { --accent: var(--tripped); }
+  .gate-id {
+    font-family: var(--mono);
+    font-size: 1.05rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .gate-id .sep { color: var(--ink-soft); margin: 0 0.15em; font-weight: 400; }
+  .gate-state {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--accent);
+    white-space: nowrap;
+    align-self: center;
+  }
+  .gate-meta {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1.1rem;
+    margin: 0.3rem 0 0;
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+  }
+  .gate-meta > div { display: flex; gap: 0.4rem; }
+  .gate-meta dt {
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    padding-top: 0.14rem;
+    opacity: 0.75;
+  }
+  .gate-meta dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+
+  /* --- open gates: deliberately quiet --- */
+  .open-block { padding: 2.25rem 0 0; }
+  .section-label {
+    font-size: 0.66rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--ink-soft);
+    margin: 0 0 0.7rem;
+  }
+  .open-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.25rem;
+    margin: 0;
+    padding: 0.85rem 1rem;
+    list-style: none;
+    border: 1px dashed var(--rule);
+    border-radius: 2px;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+  }
+
+  .foot {
+    padding: 2.5rem 0 0;
+    font-size: 0.75rem;
+    color: var(--ink-soft);
+  }
+  .foot code {
+    font-family: var(--mono);
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: 0.05rem 0.3rem;
+  }
+  a { color: inherit; }
+  a:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="bar" id="bar" data-mood="{{.Mood}}">
+    <span class="wordmark">kudzu</span>
+    <span class="bar-meta">gate board</span>
+    <span class="bar-stamp">{{.Tracked}} &middot; {{.Updated}}</span>
+  </header>
+
+  <main id="board" data-mood="{{.Mood}}">
+    <section class="verdict">
+      {{if .Count}}<p class="verdict-count">{{.Count}}</p>{{end}}
+      <h1 class="verdict-word">{{.Verdict}}</h1>
+      <p class="verdict-sub">{{.Subtitle}}</p>
+    </section>
+
+    {{if .Blocked}}
+    <section class="blocked">
+      {{range .Blocked}}
+      <article class="gate gate--{{.State}}">
+        <p class="gate-id"><span>{{.Service}}</span><span class="sep">/</span><span>{{.Env}}</span></p>
+        <p class="gate-state">{{.State}}</p>
+        <dl class="gate-meta">
+          {{if .Reason}}<div><dt>reason</dt><dd>{{.Reason}}</dd></div>{{end}}
+          {{if .Source}}<div><dt>source</dt><dd>{{.Source}}</dd></div>{{end}}
+          {{if .Actor}}<div><dt>by</dt><dd>{{.Actor}}</dd></div>{{end}}
+          {{if .Age}}<div><dt>since</dt><dd><span title="{{.Stamp}}">{{.Age}}</span></dd></div>{{end}}
+        </dl>
+      </article>
+      {{end}}
+    </section>
+    {{end}}
+
+    {{if .Open}}
+    <section class="open-block">
+      <h2 class="section-label">open &middot; {{len .Open}}</h2>
+      <ul class="open-list">
+        {{range .Open}}<li>{{.Service}}/{{.Env}}</li>{{end}}
+      </ul>
+    </section>
+    {{end}}
+
+    <p class="foot">Read-only. Freeze with <code>POST /v1/gate/freeze</code>, clear with <code>POST /v1/gate/unfreeze</code>.</p>
+  </main>
+</div>
+
+<script>
+  // Re-fetch this page every 15s and swap in the fresh board, keeping scroll
+  // position. Without JS the page is simply static until reloaded.
+  async function refresh() {
+    try {
+      const res = await fetch(location.pathname, { headers: { accept: "text/html" } });
+      if (!res.ok) return;
+      const doc = new DOMParser().parseFromString(await res.text(), "text/html");
+      for (const id of ["bar", "board"]) {
+        const next = doc.getElementById(id);
+        const current = document.getElementById(id);
+        if (next && current) current.replaceWith(next);
+      }
+    } catch (err) {
+      /* offline or mid-deploy: leave the last good board on screen */
+    }
+  }
+  setInterval(refresh, 15000);
+</script>
+</body>
+</html>
