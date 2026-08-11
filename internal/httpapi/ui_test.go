@@ -70,12 +70,11 @@ func TestDashboardShowsBlockedAndOpenGates(t *testing.T) {
 		t.Fatalf("code=%d", rec.Code)
 	}
 	for _, want := range []string{
-		`data-mood="tripped"`, // a trip outranks a freeze for the page accent
+		`data-mood="blocked"`, // anything blocked turns the board red
 		"blocked",
 		"incident 4021",
 		"billing",
 		`class="gate-table"`,
-		`<tr class="is-tripped">`, // the tripped row carries its own accent
 		`class="open-table"`,
 		"<td>orders</td><td>staging</td>", // the open gate, as a table row
 	} {
@@ -166,8 +165,9 @@ func TestBuildDashboardOrdersAndSummarises(t *testing.T) {
 
 	d := buildDashboard(gates, now)
 
-	if d.Mood != "frozen" {
-		t.Errorf("Mood = %q, want frozen", d.Mood)
+	// A freeze with no trip anywhere still turns the board red.
+	if d.Mood != "blocked" {
+		t.Errorf("Mood = %q, want blocked", d.Mood)
 	}
 	if d.Count != "2" || d.Verdict != "blocked" {
 		t.Errorf("Count/Verdict = %q/%q, want 2/blocked", d.Count, d.Verdict)

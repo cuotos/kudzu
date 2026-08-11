@@ -43,7 +43,7 @@ type uiGate struct {
 
 // uiData is the dashboard view model.
 type uiData struct {
-	Mood     string // open | frozen | tripped | empty — the worst state present
+	Mood     string // open | blocked | empty — drives the page colour scheme
 	Count    string // the big number; empty when there is nothing to count
 	Verdict  string
 	Subtitle string
@@ -103,13 +103,10 @@ func buildDashboard(gates []gate.Gate, now time.Time) uiData {
 			d.Open = append(d.Open, row)
 			continue
 		}
+		// Anything blocked turns the whole board red, whether it is a freeze or
+		// a trip; the state column carries which.
 		d.Blocked = append(d.Blocked, row)
-		// A trip is worse than a freeze, so it wins the page accent.
-		if g.State == gate.StateTripped {
-			d.Mood = "tripped"
-		} else if d.Mood != "tripped" {
-			d.Mood = "frozen"
-		}
+		d.Mood = "blocked"
 	}
 
 	d.Tracked = fmt.Sprintf("%d gates", len(gates))
