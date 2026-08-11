@@ -2,6 +2,7 @@ package gate
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -252,5 +253,42 @@ func TestScheduleMakesGateFrozen(t *testing.T) {
 	g, _ := svc.Get(ctx, k)
 	if g.State != StateFrozen || g.Source != SourceSchedule {
 		t.Fatalf("want scheduled freeze, got state=%s src=%s", g.State, g.Source)
+	}
+	// The gate reports the window it is inside, so callers can say when it lifts.
+	if !g.Since.Equal(clock.Add(-time.Minute)) {
+		t.Errorf("Since = %s, want %s", g.Since, clock.Add(-time.Minute))
+	}
+	if g.ExpiresAt == nil || !g.ExpiresAt.Equal(clock.Add(time.Minute)) {
+		t.Errorf("ExpiresAt = %v, want %v", g.ExpiresAt, clock.Add(time.Minute))
+	}
+}
+
+func TestRecurringScheduleReportsOccurrenceBounds(t *testing.T) {
+	svc, _ := newTestService(t, nil, Config{})
+	ctx := context.Background()
+
+	// A window opening on the hour and held for 90 minutes; clock sits inside it.
+	start := clock.Truncate(time.Hour)
+	svc.now = func() time.Time { return start.Add(30 * time.Minute) }
+	sc := schedule.Schedule{
+		ID:       "hourly",
+		Cron:     fmt.Sprintf("%d * * * *", start.Minute()),
+		Duration: 90 * time.Minute,
+		Reason:   "batch run",
+	}
+	if err := svc.AddSchedule(ctx, k, sc); err != nil {
+		t.Fatal(err)
+	}
+
+	g, _ := svc.Get(ctx, k)
+	if g.State != StateFrozen || g.Reason != "batch run" {
+		t.Fatalf("want frozen by the window, got state=%s reason=%q", g.State, g.Reason)
+	}
+	// A cron window used to report no start at all; now both bounds resolve.
+	if !g.Since.Equal(start) {
+		t.Errorf("Since = %s, want %s", g.Since, start)
+	}
+	if g.ExpiresAt == nil || !g.ExpiresAt.Equal(start.Add(90*time.Minute)) {
+		t.Errorf("ExpiresAt = %v, want %v", g.ExpiresAt, start.Add(90*time.Minute))
 	}
 }

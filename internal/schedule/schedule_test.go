@@ -84,7 +84,28 @@ func TestActiveWindow(t *testing.T) {
 		{ID: "fri-freeze", Cron: "0 14 * * 5", Duration: 4 * time.Hour, Reason: "weekend safety"},
 	}
 	win, ok := ActiveWindow(schedules, now)
-	if !ok || win.ID != "fri-freeze" {
+	if !ok || win.Schedule.ID != "fri-freeze" {
 		t.Fatalf("expected fri-freeze active, got %+v ok=%v", win, ok)
+	}
+	// The bounds of the occurrence, not of the cron spec: Friday 14:00 + 4h.
+	wantStart := time.Date(2026, 6, 26, 14, 0, 0, 0, time.UTC)
+	if !win.Start.Equal(wantStart) || !win.End.Equal(wantStart.Add(4*time.Hour)) {
+		t.Errorf("window = [%s, %s), want [%s, %s)",
+			win.Start, win.End, wantStart, wantStart.Add(4*time.Hour))
+	}
+}
+
+func TestWindowAtBoundsForOneOff(t *testing.T) {
+	start := time.Date(2026, 6, 26, 9, 0, 0, 0, time.UTC)
+	end := start.Add(2 * time.Hour)
+	s := Schedule{ID: "one-off", Start: &start, End: &end}
+
+	win, ok := s.WindowAt(start.Add(time.Hour))
+	if !ok || !win.Start.Equal(start) || !win.End.Equal(end) {
+		t.Fatalf("window = %+v ok=%v", win, ok)
+	}
+	// End is exclusive, so at End the window is over and has no bounds.
+	if win, ok := s.WindowAt(end); ok {
+		t.Errorf("expected no window at End, got %+v", win)
 	}
 }

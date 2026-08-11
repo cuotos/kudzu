@@ -162,6 +162,29 @@ func TestDashboardShowsFreezeTTL(t *testing.T) {
 	}
 }
 
+func TestDashboardShowsScheduleWindowEnd(t *testing.T) {
+	h := newTestRouter()
+	now := time.Now()
+
+	rec, _ := do(t, h, http.MethodPost, "/v1/schedules", testToken, map[string]any{
+		"service": "orders", "env": "production", "reason": "release train",
+		"start": now.Add(-10 * time.Minute).Format(time.RFC3339),
+		// Half a minute of slack so the rendered "in 50m" does not depend on how
+		// long the test takes to reach the render.
+		"end": now.Add(50*time.Minute + 30*time.Second).Format(time.RFC3339),
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("add schedule: code=%d", rec.Code)
+	}
+
+	_, body := getHTML(t, h, "/ui", "")
+	for _, want := range []string{"schedule", "release train", "<dt>lifts</dt>", "in 50m"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("dashboard missing %q", want)
+		}
+	}
+}
+
 func TestBuildDashboardFormatsTTL(t *testing.T) {
 	now := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
 	exp := now.Add(42 * time.Minute)

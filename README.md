@@ -36,7 +36,7 @@ Read (token optional, controlled by `KUDZU_REQUIRE_READ_AUTH`):
 
 | Method & path | Purpose |
 |---|---|
-| `GET /v1/gate?service=&env=` | Effective gate for one service/env (`{state, allowed, reason, source, since, actor, expires_at}`). `expires_at` is present only for a freeze with a TTL. The merge-queue check reads `.allowed`. |
+| `GET /v1/gate?service=&env=` | Effective gate for one service/env (`{state, allowed, reason, source, since, actor, expires_at}`). `expires_at` is set when the state lapses on its own — a freeze TTL or the end of the active schedule window — and absent for a trip or an open-ended freeze. The merge-queue check reads `.allowed`. |
 | `GET /v1/gates` | All known gates (dashboard). |
 | `GET /v1/schedules?service=&env=` | List freeze windows. |
 | `GET /` and `GET /ui` | The gate board — a read-only HTML dashboard (see below). |
@@ -57,8 +57,9 @@ Write (require a bearer token from `KUDZU_WRITE_TOKENS`):
 `GET /` (or `/ui`) serves a read-only dashboard of every known gate. It leads
 with the one thing you open it for — how many gates are blocked right now —
 gives each blocked gate a card with its reason, source, actor and age, and
-collapses the open ones into a single quiet line. A freeze created with
-`ttl_seconds` also shows when it lifts. It refreshes itself every 15 seconds.
+collapses the open ones into a single quiet line. Anything that lifts by itself
+— a freeze with a `ttl_seconds`, or a scheduled window — also shows when.
+It refreshes itself every 15 seconds.
 
 The page is a single `html/template` embedded in the binary: no separate
 frontend, no build step, no external assets or fonts, so it works offline and
