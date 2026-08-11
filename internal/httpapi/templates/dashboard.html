@@ -12,7 +12,8 @@
     --ink-soft: #5c6a5e;
     --rule: #d2d9cc;
     --open: #2f6b3f;
-    --blocked: #ad3220;
+    --frozen: #2a5f92;
+    --tripped: #ad3220;
     --accent: var(--open);
     --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
     --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -25,12 +26,15 @@
       --ink-soft: #92a094;
       --rule: #28312a;
       --open: #6ab47e;
-      --blocked: #e3775f;
+      --frozen: #78abd9;
+      --tripped: #e3775f;
     }
   }
 
-  /* Anything blocked turns the board red, so it reads across the room. */
-  [data-mood="blocked"] { --accent: var(--blocked); }
+  /* The board's accent is the worst state present, so the whole page reads
+     open / frozen / tripped from across the room. */
+  [data-mood="frozen"] { --accent: var(--frozen); }
+  [data-mood="tripped"] { --accent: var(--tripped); }
 
   * { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; }
@@ -136,6 +140,9 @@
     vertical-align: top;
   }
   .gate-table tr:last-child td { border-bottom: 0; }
+  /* The state colour runs down the left edge of its own row. */
+  .gate-table tbody tr { --accent: var(--frozen); }
+  .gate-table tbody tr.is-tripped { --accent: var(--tripped); }
   .gate-table td:first-child {
     border-left: 4px solid var(--accent);
     font-family: var(--mono);
@@ -243,7 +250,7 @@
             </tr>
           </thead>
           <tbody>
-            {{range .Blocked}}<tr><td>{{.Service}}</td><td class="env">{{.Env}}</td><td class="state">{{.State}}</td><td class="soft">{{dash .Source}}</td><td class="reason">{{dash .Reason}}</td><td class="soft">{{dash .Actor}}</td><td class="soft" title="{{.Stamp}}">{{dash .Age}}</td><td class="soft" title="{{.ExpiresStamp}}">{{dash .Expires}}</td></tr>
+            {{range .Blocked}}<tr{{if eq .State "tripped"}} class="is-tripped"{{end}}><td>{{.Service}}</td><td class="env">{{.Env}}</td><td class="state">{{.State}}</td><td class="soft">{{dash .Source}}</td><td class="reason">{{dash .Reason}}</td><td class="soft">{{dash .Actor}}</td><td class="soft" title="{{.Stamp}}">{{dash .Age}}</td><td class="soft" title="{{.ExpiresStamp}}">{{dash .Expires}}</td></tr>
             {{end}}
           </tbody>
         </table>
