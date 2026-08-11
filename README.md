@@ -40,7 +40,10 @@ Read (token optional, controlled by `KUDZU_REQUIRE_READ_AUTH`):
 | `GET /v1/gates` | All known gates (dashboard). |
 | `GET /v1/schedules` | Every freeze window Kudzu knows about, across all gates. Each entry carries its `service`/`env`, an `active` flag, and `since`/`until` bounds while active. Pass `?service=&env=` to narrow it to one gate. |
 | `GET /` and `GET /ui` | The gate board — a read-only HTML dashboard (see below). |
+| `GET /docs` | This API, documented (see below). |
+| `GET /openapi.json` | The same API as an OpenAPI 3.1 document. |
 | `GET /healthz` / `GET /readyz` / `GET /metrics` | Liveness / readiness (pings Redis) / Prometheus. |
+| `GET /versionz` | Build info for the running binary: module version, VCS revision and time, dirty flag, Go version, GOOS/GOARCH. Read straight from the Go build info, so nothing has to be stamped in at build time. |
 
 Write (require a bearer token from `KUDZU_WRITE_TOKENS`):
 
@@ -56,10 +59,10 @@ Write (require a bearer token from `KUDZU_WRITE_TOKENS`):
 
 `GET /` (or `/ui`) serves a read-only dashboard of every known gate. It leads
 with the one thing you open it for — how many gates are blocked right now —
-gives each blocked gate a card with its reason, source, actor and age, and
-collapses the open ones into a single quiet line. Anything that lifts by itself
-— a freeze with a `ttl_seconds`, or a scheduled window — also shows when.
-It refreshes itself every 15 seconds.
+then lists the blocked gates in a table — service, environment, state, source,
+reason, actor, age — above a quieter service/environment table of the open ones.
+Anything that lifts by itself (a freeze with a `ttl_seconds`, or a scheduled
+window) shows when. It refreshes itself every 15 seconds.
 
 The page is a single `html/template` embedded in the binary: no separate
 frontend, no build step, no external assets or fonts, so it works offline and
@@ -70,6 +73,25 @@ It is served under the same auth rules as the other read endpoints, so with
 `KUDZU_REQUIRE_READ_AUTH=true` a browser cannot load it (browsers do not send
 bearer tokens). If you need both, put Kudzu behind an authenticating
 ingress/SSO layer and leave `KUDZU_REQUIRE_READ_AUTH` off.
+
+## API documentation
+
+`GET /docs` renders the API — endpoints grouped by area, parameters, request
+bodies, response codes and every schema's fields. `GET /openapi.json` serves the
+same content as an OpenAPI 3.1 document, for client generators, API clients and
+contract tests. Both ship inside the binary; the page is rendered from the spec,
+so the two cannot disagree.
+
+Keeping the spec honest is a test problem, and three tests do the work:
+
+- every route in the router's table is documented, and nothing is documented
+  that is not served;
+- every write endpoint declares a bearer token, and no read endpoint claims to;
+- each schema's fields match the JSON tags of the Go type it describes, by
+  reflection — so renaming a field without touching the spec fails the build.
+
+Prose (summaries, descriptions, response-code meanings) is *not* checked. Treat
+it as documentation, not a contract.
 
 ## Circuit breaker & proactive eviction
 

@@ -13,12 +13,23 @@ import (
 	"github.com/cuotos/kudzu/internal/gate"
 )
 
-//go:embed templates/dashboard.html
+//go:embed templates/dashboard.html templates/docs.html
 var uiFS embed.FS
 
 // dashboardTmpl is parsed at init so a broken template fails the binary, not a
 // request.
-var dashboardTmpl = template.Must(template.ParseFS(uiFS, "templates/dashboard.html"))
+var dashboardTmpl = template.Must(template.New("dashboard.html").
+	Funcs(template.FuncMap{"dash": dash}).
+	ParseFS(uiFS, "templates/dashboard.html"))
+
+// dash renders an empty cell as an em dash, so a table row keeps its shape when
+// a gate has no reason, actor, or expiry.
+func dash(v any) string {
+	if s := fmt.Sprint(v); s != "" {
+		return s
+	}
+	return "—"
+}
 
 // uiGate is one gate as the dashboard shows it: the gate plus pre-formatted
 // timestamps, so the template stays logic-free.
