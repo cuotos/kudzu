@@ -38,14 +38,22 @@ func NewRouter(opts Options) http.Handler {
 		return h
 	}
 
+	registerAs := func(route, pattern string, h http.HandlerFunc) {
+		mux.HandleFunc(pattern, instrument(route, log, opts.Metrics, h))
+	}
+
 	register := func(pattern string, h http.HandlerFunc) {
 		// The route label for metrics is the pattern minus the method.
 		route := pattern
 		if _, after, ok := strings.Cut(pattern, " "); ok {
 			route = after
 		}
-		mux.HandleFunc(pattern, instrument(route, log, opts.Metrics, h))
+		registerAs(route, pattern, h)
 	}
+
+	// Read-only dashboard, at the root and at /ui. Gated like the other reads.
+	registerAs("/ui", "GET /{$}", read(srv.handleUI))
+	registerAs("/ui", "GET /ui", read(srv.handleUI))
 
 	// Reads.
 	register("GET /v1/gate", read(srv.handleGetGate))

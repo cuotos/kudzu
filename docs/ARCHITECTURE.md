@@ -70,6 +70,7 @@ internal/
     memory/                gate.Store in memory (tests / local single-replica)
   github/                  gate.Evicter via a GitHub App (merge-queue eviction)
   httpapi/                 router, handlers, bearer auth, logging/metrics/recovery mw
+    templates/             embedded HTML for the read-only gate board
   observability/           Prometheus registry, HTTP instruments, live gate collector
   config/                  load Config from environment variables
 deploy/                    Dockerfile + Helm chart
@@ -189,7 +190,18 @@ protected routes reject everything. `require()` wraps a handler.
 `statusRecorder` captures the response status. The `route` label is the static
 pattern (not the concrete path) to keep metric cardinality bounded.
 
-**`handlers_test.go`** — HTTP-level tests using a fake `GateService`.
+**`ui.go` + `templates/dashboard.html`** — the read-only gate board served at
+`/` and `/ui`, gated by the same `RequireReadAuth` switch as the other reads.
+The template is `go:embed`ed and parsed at package init, so a broken template
+fails the binary rather than a request; `buildDashboard` turns `[]gate.Gate`
+into a logic-free view model (blocked gates as full cards, open gates collapsed
+into one quiet list, plus the worst-state "mood" that colours the page). The
+page is rendered into a buffer before writing so a template error cannot emit
+half a page. No JS build step and no external assets: one file, one `<style>`,
+and a small `setInterval` that re-fetches and swaps the board every 15s.
+
+**`handlers_test.go`, `ui_test.go`** — HTTP-level tests driving a real
+`gate.Service` over the in-memory store.
 
 ### `internal/observability/metrics.go` — Prometheus
 `Metrics` owns a private registry with Go/process collectors plus:

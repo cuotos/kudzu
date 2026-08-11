@@ -39,6 +39,7 @@ Read (token optional, controlled by `KUDZU_REQUIRE_READ_AUTH`):
 | `GET /v1/gate?service=&env=` | Effective gate for one service/env (`{state, allowed, reason, source, since, actor}`). The merge-queue check reads `.allowed`. |
 | `GET /v1/gates` | All known gates (dashboard). |
 | `GET /v1/schedules?service=&env=` | List freeze windows. |
+| `GET /` and `GET /ui` | The gate board — a read-only HTML dashboard (see below). |
 | `GET /healthz` / `GET /readyz` / `GET /metrics` | Liveness / readiness (pings Redis) / Prometheus. |
 
 Write (require a bearer token from `KUDZU_WRITE_TOKENS`):
@@ -50,6 +51,24 @@ Write (require a bearer token from `KUDZU_WRITE_TOKENS`):
 | `POST /v1/deploy-result` | `{service, env, status:"success"\|"failed", repo:"owner/name", base?, sha?, run_url?, actor?}` |
 | `POST /v1/schedules` | `{service, env, reason, cron, duration_seconds}` (recurring) or `{…, start, end}` (one-off) |
 | `DELETE /v1/schedules/{id}?service=&env=` | remove a window |
+
+## The gate board (UI)
+
+`GET /` (or `/ui`) serves a read-only dashboard of every known gate. It leads
+with the one thing you open it for — how many gates are blocked right now —
+gives each blocked gate a card with its reason, source, actor and age, and
+collapses the open ones into a single quiet line. It refreshes itself every 15
+seconds.
+
+The page is a single `html/template` embedded in the binary: no separate
+frontend, no build step, no external assets or fonts, so it works offline and
+behind a strict CSP. It is **read-only** — freezing and unfreezing stay on the
+authenticated API.
+
+It is served under the same auth rules as the other read endpoints, so with
+`KUDZU_REQUIRE_READ_AUTH=true` a browser cannot load it (browsers do not send
+bearer tokens). If you need both, put Kudzu behind an authenticating
+ingress/SSO layer and leave `KUDZU_REQUIRE_READ_AUTH` off.
 
 ## Circuit breaker & proactive eviction
 
@@ -161,7 +180,7 @@ internal/gate      domain: state model, effective-state rules, Service, ports
 internal/schedule  freeze-window evaluation (cron + duration / one-off)
 internal/store     gate.Store: redis (prod) and memory (tests/local)
 internal/github    GitHub App evicter (gate.Evicter)
-internal/httpapi   router, handlers, bearer auth, logging/metrics middleware
+internal/httpapi   router, handlers, bearer auth, logging/metrics middleware, UI
 internal/observability  Prometheus metrics + live gate-state collector
 deploy             Dockerfile + Helm chart
 github             composite "Kudzu Gate" action + example workflows
