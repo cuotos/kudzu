@@ -4,7 +4,6 @@ package httpapi
 import (
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -38,38 +37,19 @@ func NewRouter(opts Options) http.Handler {
 		return h
 	}
 
-	registerAs := func(route, pattern string, h http.HandlerFunc) {
-		mux.HandleFunc(pattern, instrument(route, log, opts.Metrics, h))
-	}
-
-	register := func(pattern string, h http.HandlerFunc) {
-		// The route label for metrics is the pattern minus the method.
-		route := pattern
-		if _, after, ok := strings.Cut(pattern, " "); ok {
-			route = after
+	for _, rt := range routes {
+		h := rt.Handler(srv)
+		switch rt.Auth {
+		case authWrite:
+			h = auth.require(h)
+		case authRead:
+			h = read(h)
 		}
-		registerAs(route, pattern, h)
+		mux.HandleFunc(rt.Method+" "+rt.Pattern, instrument(rt.label(), log, opts.Metrics, h))
 	}
 
-	// Read-only dashboard, at the root and at /ui. Gated like the other reads.
-	registerAs("/ui", "GET /{$}", read(srv.handleUI))
-	registerAs("/ui", "GET /ui", read(srv.handleUI))
-
-	// Reads.
-	register("GET /v1/gate", read(srv.handleGetGate))
-	register("GET /v1/gates", read(srv.handleListGates))
-	register("GET /v1/schedules", read(srv.handleListSchedules))
-
-	// Writes (always authenticated).
-	register("POST /v1/gate/freeze", auth.require(srv.handleFreeze))
-	register("POST /v1/gate/unfreeze", auth.require(srv.handleUnfreeze))
-	register("POST /v1/deploy-result", auth.require(srv.handleDeployResult))
-	register("POST /v1/schedules", auth.require(srv.handleAddSchedule))
-	register("DELETE /v1/schedules/{id}", auth.require(srv.handleDeleteSchedule))
-
-	// Operational endpoints (unauthenticated).
-	register("GET /healthz", srv.handleHealthz)
-	register("GET /readyz", srv.handleReadyz)
+	// Metrics is the one route whose handler comes from the caller rather than
+	// the server, so it sits outside the table.
 	if opts.MetricsHandler != nil {
 		mux.Handle("GET /metrics", opts.MetricsHandler)
 	}

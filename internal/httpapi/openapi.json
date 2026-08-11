@@ -1,0 +1,365 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Kudzu",
+    "version": "1.0.0",
+    "description": "Kudzu decides whether it is safe to deploy a given service to a given environment, and lets a GitHub merge queue enforce that decision. A gate is keyed by (service, environment) and has one effective state, computed with the precedence tripped > manual freeze > scheduled freeze > open. Any non-open state ejects queued pull requests.\n\nWrite endpoints always require a bearer token from KUDZU_WRITE_TOKENS. Read endpoints are unauthenticated unless KUDZU_REQUIRE_READ_AUTH is set, in which case they take the same tokens."
+  },
+  "servers": [{ "url": "/", "description": "This Kudzu instance" }],
+  "tags": [
+    { "name": "gates", "description": "Read and change the state of a gate." },
+    { "name": "schedules", "description": "Pre-declared freeze windows, one-off or recurring." },
+    { "name": "operational", "description": "Probes, metrics and build information. Never authenticated." },
+    { "name": "pages", "description": "Human-facing pages and this specification." }
+  ],
+  "paths": {
+    "/v1/gate": {
+      "get": {
+        "tags": ["gates"],
+        "summary": "Get the effective gate for one service and environment",
+        "description": "The merge-queue check reads `.allowed`. A gate that has never been touched reads open.",
+        "parameters": [
+          { "name": "service", "in": "query", "required": true, "description": "Service name.", "schema": { "type": "string" } },
+          { "name": "env", "in": "query", "required": true, "description": "Environment name.", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "The effective gate.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Gate" } } } },
+          "400": { "description": "service or env missing.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "Read auth is enabled and the token was missing or wrong." }
+        }
+      }
+    },
+    "/v1/gates": {
+      "get": {
+        "tags": ["gates"],
+        "summary": "List the effective gate for every known service and environment",
+        "description": "A gate becomes known the first time it is frozen, scheduled, or a deploy result lands for it.",
+        "responses": {
+          "200": { "description": "Every known gate.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GateList" } } } },
+          "401": { "description": "Read auth is enabled and the token was missing or wrong." }
+        }
+      }
+    },
+    "/v1/gate/freeze": {
+      "post": {
+        "tags": ["gates"],
+        "summary": "Freeze a gate manually",
+        "description": "Blocks merges until unfrozen, or until ttl_seconds elapses if one is given.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/FreezeRequest" } } } },
+        "responses": {
+          "200": { "description": "The gate after freezing.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Gate" } } } },
+          "400": { "description": "Invalid body, unknown field, or missing service/env.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "Missing or invalid write token." }
+        }
+      }
+    },
+    "/v1/gate/unfreeze": {
+      "post": {
+        "tags": ["gates"],
+        "summary": "Clear a manual freeze and reset a tripped breaker",
+        "description": "This is the only way to clear a trip: a successful deploy resets the failure counter but leaves the trip in place.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UnfreezeRequest" } } } },
+        "responses": {
+          "200": { "description": "The gate after unfreezing.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Gate" } } } },
+          "400": { "description": "Invalid body or missing service/env.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "Missing or invalid write token." }
+        }
+      }
+    },
+    "/v1/deploy-result": {
+      "post": {
+        "tags": ["gates"],
+        "summary": "Report a deploy result to the circuit breaker",
+        "description": "A failure increments the consecutive-failure counter and trips the gate once it reaches BREAKER_FAILURE_THRESHOLD. A success resets the counter but does not clear a trip. When a GitHub App is configured, a trip also posts a failing commit status to in-flight merge-group branches of repo, evicting them immediately.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeployResult" } } } },
+        "responses": {
+          "200": { "description": "The gate after recording the result.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Gate" } } } },
+          "400": { "description": "Invalid body, missing service/env, or a status other than success/failed.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "Missing or invalid write token." }
+        }
+      }
+    },
+    "/v1/schedules": {
+      "get": {
+        "tags": ["schedules"],
+        "summary": "List freeze windows",
+        "description": "With no service and no env, returns the windows of every known gate. Pass both to narrow it to one gate; passing only one is a 400.",
+        "parameters": [
+          { "name": "service", "in": "query", "required": false, "description": "Narrow to one gate. Requires env.", "schema": { "type": "string" } },
+          { "name": "env", "in": "query", "required": false, "description": "Narrow to one gate. Requires service.", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "The matching windows.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ScheduleList" } } } },
+          "400": { "description": "Only one of service and env was given.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "Read auth is enabled and the token was missing or wrong." }
+        }
+      },
+      "post": {
+        "tags": ["schedules"],
+        "summary": "Add a freeze window",
+        "description": "Give either cron and duration_seconds for a recurring window, or start and end for a one-off. The cron expression is standard 5-field (minute hour day-of-month month day-of-week); there is no seconds field and no @daily-style descriptors, so `* * * * *` is the shortest valid form.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ScheduleRequest" } } } },
+        "responses": {
+          "201": { "description": "The stored window, including the generated id if none was given.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Schedule" } } } },
+          "400": { "description": "Invalid body, missing service/env, or a window that is neither a valid cron+duration nor a start+end.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "Missing or invalid write token." }
+        }
+      }
+    },
+    "/v1/schedules/{id}": {
+      "delete": {
+        "tags": ["schedules"],
+        "summary": "Remove a freeze window",
+        "description": "Windows are stored per gate, so the service and env locate the collection and the id picks the window within it.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "description": "Window id, as returned when it was added.", "schema": { "type": "string" } },
+          { "name": "service", "in": "query", "required": true, "description": "Service name.", "schema": { "type": "string" } },
+          { "name": "env", "in": "query", "required": true, "description": "Environment name.", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "204": { "description": "Removed, or already absent." },
+          "400": { "description": "service or env missing.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "Missing or invalid write token." }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": ["operational"],
+        "summary": "Liveness probe",
+        "description": "Always 200 while the process is serving. Does not touch the store.",
+        "responses": {
+          "200": { "description": "Alive.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Status" } } } }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "tags": ["operational"],
+        "summary": "Readiness probe",
+        "description": "Pings the backing store, so it fails while Redis is unreachable.",
+        "responses": {
+          "200": { "description": "Ready.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Status" } } } },
+          "503": { "description": "The store is unavailable.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/versionz": {
+      "get": {
+        "tags": ["operational"],
+        "summary": "Build information for the running binary",
+        "description": "Read from the Go build info embedded in the binary. The VCS fields are present only when the toolchain could see the repository at build time.",
+        "responses": {
+          "200": { "description": "Build information.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Version" } } } }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": ["operational"],
+        "summary": "Prometheus metrics",
+        "description": "Request counts and durations by method, route and status, plus a live gauge per gate state. Served only when a metrics handler is wired in.",
+        "responses": {
+          "200": { "description": "Metrics in the Prometheus text exposition format.", "content": { "text/plain": { "schema": { "type": "string" } } } }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "tags": ["pages"],
+        "summary": "The gate board",
+        "description": "A read-only HTML dashboard of every known gate. Identical to /ui.",
+        "responses": {
+          "200": { "description": "The dashboard.", "content": { "text/html": { "schema": { "type": "string" } } } },
+          "401": { "description": "Read auth is enabled, which a browser cannot satisfy; put Kudzu behind an authenticating ingress instead." }
+        }
+      }
+    },
+    "/ui": {
+      "get": {
+        "tags": ["pages"],
+        "summary": "The gate board",
+        "description": "A read-only HTML dashboard of every known gate. Identical to /.",
+        "responses": {
+          "200": { "description": "The dashboard.", "content": { "text/html": { "schema": { "type": "string" } } } },
+          "401": { "description": "Read auth is enabled and the token was missing or wrong." }
+        }
+      }
+    },
+    "/docs": {
+      "get": {
+        "tags": ["pages"],
+        "summary": "This API documentation",
+        "description": "Rendered from the same specification served at /openapi.json, so the two cannot disagree.",
+        "responses": {
+          "200": { "description": "The documentation page.", "content": { "text/html": { "schema": { "type": "string" } } } },
+          "401": { "description": "Read auth is enabled and the token was missing or wrong." }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "tags": ["pages"],
+        "summary": "This specification, as OpenAPI 3.1",
+        "description": "Feed it to a client generator, an API client, or a contract test.",
+        "responses": {
+          "200": { "description": "The OpenAPI document.", "content": { "application/json": { "schema": { "type": "object" } } } },
+          "401": { "description": "Read auth is enabled and the token was missing or wrong." }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "A token from KUDZU_WRITE_TOKENS. Kudzu fails closed: with no tokens configured, every write is rejected."
+      }
+    },
+    "schemas": {
+      "Gate": {
+        "type": "object",
+        "description": "The effective, computed state of one gate.",
+        "required": ["service", "env", "state", "allowed"],
+        "properties": {
+          "service": { "type": "string", "description": "Service name." },
+          "env": { "type": "string", "description": "Environment name." },
+          "state": { "type": "string", "enum": ["open", "frozen", "tripped"], "description": "Effective state, computed with the precedence tripped > manual freeze > scheduled freeze > open." },
+          "allowed": { "type": "boolean", "description": "Whether merges are allowed. The merge-queue check reads this field." },
+          "reason": { "type": "string", "description": "Why the gate is not open." },
+          "source": { "type": "string", "enum": ["manual", "schedule", "breaker"], "description": "What caused the non-open state." },
+          "since": { "type": "string", "format": "date-time", "description": "When the current state began." },
+          "actor": { "type": "string", "description": "Who caused it, when known." },
+          "expires_at": { "type": "string", "format": "date-time", "description": "When the state lapses on its own — a freeze TTL, or the end of the active schedule window. Absent for a trip or an open-ended freeze." }
+        }
+      },
+      "GateList": {
+        "type": "object",
+        "required": ["gates"],
+        "properties": {
+          "gates": { "type": "array", "description": "Every known gate.", "items": { "$ref": "#/components/schemas/Gate" } }
+        }
+      },
+      "FreezeRequest": {
+        "type": "object",
+        "required": ["service", "env"],
+        "properties": {
+          "service": { "type": "string", "description": "Service name." },
+          "env": { "type": "string", "description": "Environment name." },
+          "reason": { "type": "string", "description": "Shown on the gate and the board." },
+          "actor": { "type": "string", "description": "Who is freezing." },
+          "ttl_seconds": { "type": "integer", "description": "Lift the freeze automatically after this many seconds. Omit or 0 for an open-ended freeze." }
+        }
+      },
+      "UnfreezeRequest": {
+        "type": "object",
+        "required": ["service", "env"],
+        "properties": {
+          "service": { "type": "string", "description": "Service name." },
+          "env": { "type": "string", "description": "Environment name." },
+          "actor": { "type": "string", "description": "Who is unfreezing." }
+        }
+      },
+      "DeployResult": {
+        "type": "object",
+        "required": ["service", "env", "status"],
+        "properties": {
+          "service": { "type": "string", "description": "Service name." },
+          "env": { "type": "string", "description": "Environment name." },
+          "status": { "type": "string", "enum": ["success", "failed"], "description": "Outcome of the deploy." },
+          "repo": { "type": "string", "description": "owner/name, used to evict in-flight merge groups on a trip. Without it a trip cannot evict proactively." },
+          "base": { "type": "string", "description": "Merge-queue base branch. Defaults to main." },
+          "sha": { "type": "string", "description": "Commit that was deployed." },
+          "run_url": { "type": "string", "description": "Link back to the CI run." },
+          "actor": { "type": "string", "description": "Who or what deployed." }
+        }
+      },
+      "Schedule": {
+        "type": "object",
+        "description": "A stored freeze window. Exactly one of (start, end) or (cron, duration) is set.",
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "description": "Window id, generated when not supplied." },
+          "reason": { "type": "string", "description": "Shown on the gate while the window is active." },
+          "cron": { "type": "string", "description": "Standard 5-field cron marking the window start." },
+          "duration": { "type": "integer", "description": "How long the recurring window stays open, in nanoseconds." },
+          "start": { "type": "string", "format": "date-time", "description": "Start of a one-off window, inclusive." },
+          "end": { "type": "string", "format": "date-time", "description": "End of a one-off window, exclusive." }
+        }
+      },
+      "ScheduleRequest": {
+        "type": "object",
+        "required": ["service", "env"],
+        "properties": {
+          "service": { "type": "string", "description": "Service name." },
+          "env": { "type": "string", "description": "Environment name." },
+          "id": { "type": "string", "description": "Window id. Generated when omitted." },
+          "reason": { "type": "string", "description": "Shown on the gate while the window is active." },
+          "cron": { "type": "string", "description": "Standard 5-field cron marking the window start, e.g. `0 14 * * 5`. Pair with duration_seconds." },
+          "duration_seconds": { "type": "integer", "description": "How long a recurring window stays open. Pair with cron." },
+          "start": { "type": "string", "format": "date-time", "description": "Start of a one-off window, inclusive. Pair with end." },
+          "end": { "type": "string", "format": "date-time", "description": "End of a one-off window, exclusive. Pair with start." }
+        }
+      },
+      "ScheduleEntry": {
+        "type": "object",
+        "description": "A stored window plus the gate it belongs to and whether it is in force now. The schedule's own fields are inlined.",
+        "required": ["service", "env", "id", "active"],
+        "properties": {
+          "service": { "type": "string", "description": "Service name." },
+          "env": { "type": "string", "description": "Environment name." },
+          "id": { "type": "string", "description": "Window id." },
+          "reason": { "type": "string", "description": "Shown on the gate while the window is active." },
+          "cron": { "type": "string", "description": "Standard 5-field cron marking the window start." },
+          "duration": { "type": "integer", "description": "How long the recurring window stays open, in nanoseconds." },
+          "start": { "type": "string", "format": "date-time", "description": "Start of a one-off window." },
+          "end": { "type": "string", "format": "date-time", "description": "End of a one-off window." },
+          "active": { "type": "boolean", "description": "Whether the window contains the current time." },
+          "since": { "type": "string", "format": "date-time", "description": "Start of the occurrence in force now. Present only while active." },
+          "until": { "type": "string", "format": "date-time", "description": "End of the occurrence in force now. Present only while active." }
+        }
+      },
+      "ScheduleList": {
+        "type": "object",
+        "required": ["schedules"],
+        "properties": {
+          "schedules": { "type": "array", "description": "Matching windows.", "items": { "$ref": "#/components/schemas/ScheduleEntry" } }
+        }
+      },
+      "Version": {
+        "type": "object",
+        "required": ["version", "go"],
+        "properties": {
+          "version": { "type": "string", "description": "Main module version: a semver tag, or (devel) for a build from a working tree." },
+          "revision": { "type": "string", "description": "VCS commit the binary was built from. Absent when the build was not stamped." },
+          "time": { "type": "string", "format": "date-time", "description": "Commit time of that revision." },
+          "dirty": { "type": "boolean", "description": "Whether the working tree had uncommitted changes at build time." },
+          "module": { "type": "string", "description": "Main module path." },
+          "go": { "type": "string", "description": "Go toolchain version." },
+          "os": { "type": "string", "description": "Target GOOS." },
+          "arch": { "type": "string", "description": "Target GOARCH." }
+        }
+      },
+      "Status": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "type": "string", "description": "ok or ready." }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": { "type": "string", "description": "What went wrong. Internal failures are logged in full and reported here only as \"internal error\"." }
+        }
+      }
+    }
+  }
+}

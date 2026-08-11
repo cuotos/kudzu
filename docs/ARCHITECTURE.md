@@ -183,10 +183,28 @@ server to verify the ref-listing + status-posting calls.
 
 ### `internal/httpapi/` — the HTTP adapter
 
+**`routes.go`** — the `routes` table: one `routeDef` per endpoint with its
+method, pattern, auth class and handler. This is the **single source of truth**
+for what Kudzu serves: `NewRouter` registers from it and the docs tests check the
+OpenAPI spec against it, so a new endpoint cannot ship undocumented or with the
+wrong auth.
+
 **`router.go`** — `NewRouter(Options)` builds the `http.ServeMux` (Go 1.22+
-method-aware patterns). Maps every route to a handler, wraps writes (and
-optionally reads) in token auth, and wraps everything in the `instrument`
-middleware. Defines `Options` and `DefaultReadTimeout`.
+method-aware patterns) by walking `routes`, wrapping writes (and optionally
+reads) in token auth and everything in the `instrument` middleware. `/metrics` is
+the one route registered outside the table, since its handler comes from the
+caller. Defines `Options` and `DefaultReadTimeout`.
+
+**`openapi.json` + `docs.go` + `templates/docs.html`** — the API documentation.
+The spec is `go:embed`ed and served verbatim at `/openapi.json`; `/docs` renders
+the *same* decoded spec, so the page and the document cannot disagree. `docs.go`
+declares only the slice of OpenAPI the page needs and `buildDocs` turns it into a
+view model (operations grouped by tag in spec order, schemas alphabetical).
+
+**`version.go`** — `/versionz`, built from `debug.ReadBuildInfo()` and cached
+with `sync.OnceValue`. The VCS fields depend on the toolchain seeing the
+repository at build time, which is why `.dockerignore` deliberately does **not**
+exclude `.git`.
 
 **`handlers.go`** — the `Server` type and one handler per endpoint. Declares the
 `GateService` interface (the slice of `gate.Service` the HTTP layer needs — note
@@ -215,8 +233,10 @@ page is rendered into a buffer before writing so a template error cannot emit
 half a page. No JS build step and no external assets: one file, one `<style>`,
 and a small `setInterval` that re-fetches and swaps the board every 15s.
 
-**`handlers_test.go`, `ui_test.go`** — HTTP-level tests driving a real
-`gate.Service` over the in-memory store.
+**`handlers_test.go`, `ui_test.go`, `docs_test.go`** — HTTP-level tests driving a
+real `gate.Service` over the in-memory store. `docs_test.go` also holds the three
+drift guards: route coverage both ways, auth agreement, and schema fields
+compared to the Go types by reflection. Prose in the spec is not checked.
 
 ### `internal/observability/metrics.go` — Prometheus
 `Metrics` owns a private registry with Go/process collectors plus:

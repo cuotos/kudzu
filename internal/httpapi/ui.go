@@ -13,7 +13,7 @@ import (
 	"github.com/cuotos/kudzu/internal/gate"
 )
 
-//go:embed templates/dashboard.html
+//go:embed templates/dashboard.html templates/docs.html
 var uiFS embed.FS
 
 // dashboardTmpl is parsed at init so a broken template fails the binary, not a
