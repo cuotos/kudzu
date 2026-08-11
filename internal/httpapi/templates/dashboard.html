@@ -172,19 +172,32 @@
     color: var(--ink-soft);
     margin: 0 0 0.7rem;
   }
-  .open-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem 1.25rem;
-    margin: 0;
-    padding: 0.85rem 1rem;
-    list-style: none;
-    border: 1px dashed var(--rule);
-    border-radius: 2px;
+  .table-wrap { overflow-x: auto; }
+  .open-table {
+    width: 100%;
+    border-collapse: collapse;
     font-family: var(--mono);
     font-size: 0.82rem;
+    white-space: nowrap;
+  }
+  .open-table th {
+    font-family: var(--sans);
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    text-align: left;
+    color: var(--ink-soft);
+    padding: 0 1.5rem 0.5rem 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .open-table td {
+    padding: 0.45rem 1.5rem 0.45rem 0;
+    border-bottom: 1px solid var(--rule);
     color: var(--ink-soft);
   }
+  .open-table td:first-child { color: var(--ink); }
+  .open-table tr:last-child td { border-bottom: 0; }
 
   .foot {
     padding: 2.5rem 0 0;
@@ -241,9 +254,17 @@
     {{if .Open}}
     <section class="open-block">
       <h2 class="section-label">open &middot; {{len .Open}}</h2>
-      <ul class="open-list">
-        {{range .Open}}<li>{{.Service}}/{{.Env}}</li>{{end}}
-      </ul>
+      <div class="table-wrap">
+        <table class="open-table">
+          <thead>
+            <tr><th scope="col">Service</th><th scope="col">Environment</th></tr>
+          </thead>
+          <tbody>
+            {{range .Open}}<tr><td>{{.Service}}</td><td>{{.Env}}</td></tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
     </section>
     {{end}}
 

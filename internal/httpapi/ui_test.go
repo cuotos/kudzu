@@ -61,11 +61,47 @@ func TestDashboardShowsBlockedAndOpenGates(t *testing.T) {
 		"blocked",
 		"incident 4021",
 		"billing",
-		"orders/staging", // the open gate, in the quiet list
+		`class="open-table"`,
+		"<td>orders</td><td>staging</td>", // the open gate, as a table row
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("dashboard missing %q", want)
 		}
+	}
+}
+
+func TestDashboardOpenTableHasARowPerOpenGate(t *testing.T) {
+	h := newTestRouter()
+
+	for _, env := range []string{"staging", "production", "sandbox"} {
+		do(t, h, http.MethodPost, "/v1/deploy-result", testToken,
+			map[string]any{"service": "orders", "env": env, "status": "success", "repo": "cuotos/orders"})
+	}
+	// A frozen gate belongs in the blocked cards, not the open table.
+	do(t, h, http.MethodPost, "/v1/gate/freeze", testToken,
+		map[string]any{"service": "orders", "env": "production", "reason": "incident", "actor": "dan"})
+
+	_, body := getHTML(t, h, "/ui", "")
+
+	_, table, found := strings.Cut(body, `class="open-table"`)
+	if !found {
+		t.Fatalf("no open table rendered:\n%s", body)
+	}
+	table, _, _ = strings.Cut(table, "</table>")
+
+	if got := strings.Count(table, "<tr><td>"); got != 2 {
+		t.Errorf("open table has %d body rows, want 2", got)
+	}
+	if !strings.Contains(table, "<td>orders</td><td>sandbox</td>") ||
+		!strings.Contains(table, "<td>orders</td><td>staging</td>") {
+		t.Errorf("missing an open row:\n%s", table)
+	}
+	if strings.Contains(table, "<td>production</td>") {
+		t.Errorf("the frozen gate leaked into the open table:\n%s", table)
+	}
+	// Rows keep the service/env sort, so the table does not reshuffle on refresh.
+	if strings.Index(table, "sandbox") > strings.Index(table, "staging") {
+		t.Errorf("rows out of order:\n%s", table)
 	}
 }
 

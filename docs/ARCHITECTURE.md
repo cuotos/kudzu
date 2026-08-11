@@ -208,8 +208,8 @@ pattern (not the concrete path) to keep metric cardinality bounded.
 `/` and `/ui`, gated by the same `RequireReadAuth` switch as the other reads.
 The template is `go:embed`ed and parsed at package init, so a broken template
 fails the binary rather than a request; `buildDashboard` turns `[]gate.Gate`
-into a logic-free view model (blocked gates as full cards, open gates collapsed
-into one quiet list, plus the worst-state "mood" that colours the page). The
+into a logic-free view model (blocked gates as full cards, open gates as a quiet
+service/environment table, plus the worst-state "mood" that colours the page). The
 page is rendered into a buffer before writing so a template error cannot emit
 half a page. No JS build step and no external assets: one file, one `<style>`,
 and a small `setInterval` that re-fetches and swaps the board every 15s.

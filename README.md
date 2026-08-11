@@ -57,7 +57,7 @@ Write (require a bearer token from `KUDZU_WRITE_TOKENS`):
 `GET /` (or `/ui`) serves a read-only dashboard of every known gate. It leads
 with the one thing you open it for — how many gates are blocked right now —
 gives each blocked gate a card with its reason, source, actor and age, and
-collapses the open ones into a single quiet line. Anything that lifts by itself
+lists the open ones quietly in a service/environment table. Anything that lifts by itself
 — a freeze with a `ttl_seconds`, or a scheduled window — also shows when.
 It refreshes itself every 15 seconds.
 
