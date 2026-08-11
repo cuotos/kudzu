@@ -47,6 +47,9 @@ type Gate struct {
 	Source  Source    `json:"source,omitempty"`
 	Since   time.Time `json:"since,omitzero"`
 	Actor   string    `json:"actor,omitempty"`
+	// ExpiresAt is when the current state lapses on its own — set from a manual
+	// freeze's TTL. Nil means it holds until something clears it.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
 // Freeze is a manual freeze record. A nil *Freeze means no manual freeze.
@@ -149,6 +152,7 @@ func Effective(k Key, f *Freeze, b *Breaker, schedules []schedule.Schedule, now 
 	case f.ActiveAt(now):
 		g.State, g.Allowed, g.Source = StateFrozen, false, SourceManual
 		g.Reason, g.Since, g.Actor = f.Reason, f.Since, f.Actor
+		g.ExpiresAt = f.ExpiresAt
 	default:
 		if win, ok := schedule.ActiveWindow(schedules, now); ok {
 			g.State, g.Allowed, g.Source = StateFrozen, false, SourceSchedule

@@ -173,8 +173,23 @@ func TestFreezeTTLExpiry(t *testing.T) {
 	if _, err := svc.Freeze(ctx, k, "short", "dan", time.Hour); err != nil {
 		t.Fatal(err)
 	}
-	if g, _ := svc.Get(ctx, k); g.State != StateFrozen {
+	g, _ := svc.Get(ctx, k)
+	if g.State != StateFrozen {
 		t.Fatalf("want frozen within ttl, got %s", g.State)
+	}
+	// The TTL is surfaced on the effective gate so callers can show when it lifts.
+	if g.ExpiresAt == nil || !g.ExpiresAt.Equal(clock.Add(time.Hour)) {
+		t.Fatalf("ExpiresAt = %v, want %v", g.ExpiresAt, clock.Add(time.Hour))
+	}
+	// A freeze with no TTL reports no expiry.
+	if _, err := svc.Freeze(ctx, k, "indefinite", "dan", 0); err != nil {
+		t.Fatal(err)
+	}
+	if g, _ := svc.Get(ctx, k); g.ExpiresAt != nil {
+		t.Fatalf("ExpiresAt = %v, want nil", g.ExpiresAt)
+	}
+	if _, err := svc.Freeze(ctx, k, "short", "dan", time.Hour); err != nil {
+		t.Fatal(err)
 	}
 	// Advance the clock past the TTL.
 	svc.now = func() time.Time { return clock.Add(2 * time.Hour) }
