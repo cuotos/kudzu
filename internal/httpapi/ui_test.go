@@ -11,6 +11,19 @@ import (
 	"github.com/cuotos/kudzu/internal/store/memory"
 )
 
+// blockedRow returns the blocked-table row for a service. Each row is rendered
+// on its own source line, so a line match is enough to isolate one gate.
+func blockedRow(t *testing.T, body, service string) string {
+	t.Helper()
+	for line := range strings.SplitSeq(body, "\n") {
+		if strings.Contains(line, "<td>"+service+"</td>") && strings.Contains(line, `class="state"`) {
+			return line
+		}
+	}
+	t.Fatalf("no blocked row for %q in:\n%s", service, body)
+	return ""
+}
+
 // getHTML fetches path and returns the response and its body as a string.
 func getHTML(t *testing.T, h http.Handler, path, token string) (*httptest.ResponseRecorder, string) {
 	t.Helper()
@@ -61,6 +74,8 @@ func TestDashboardShowsBlockedAndOpenGates(t *testing.T) {
 		"blocked",
 		"incident 4021",
 		"billing",
+		`class="gate-table"`,
+		`<tr class="is-tripped">`, // the tripped row carries its own accent
 		`class="open-table"`,
 		"<td>orders</td><td>staging</td>", // the open gate, as a table row
 	} {
@@ -189,12 +204,12 @@ func TestDashboardShowsFreezeTTL(t *testing.T) {
 	})
 
 	_, body := getHTML(t, h, "/ui", "")
-	if !strings.Contains(body, "in 1h") {
-		t.Errorf("expected the TTL to be rendered, got:\n%s", body)
+	if row := blockedRow(t, body, "orders"); !strings.Contains(row, "in 1h") {
+		t.Errorf("expected the TTL in the orders row, got:\n%s", row)
 	}
-	// One card has a TTL, the other must not grow an empty row for it.
-	if got := strings.Count(body, "<dt>lifts</dt>"); got != 1 {
-		t.Errorf("lifts rows = %d, want 1", got)
+	// The gate with no TTL keeps the column, filled with an em dash.
+	if row := blockedRow(t, body, "billing"); !strings.HasSuffix(row, "<td class=\"soft\" title=\"\">—</td></tr>") {
+		t.Errorf("expected an empty lifts cell for billing, got:\n%s", row)
 	}
 }
 
@@ -214,9 +229,10 @@ func TestDashboardShowsScheduleWindowEnd(t *testing.T) {
 	}
 
 	_, body := getHTML(t, h, "/ui", "")
-	for _, want := range []string{"schedule", "release train", "<dt>lifts</dt>", "in 50m"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("dashboard missing %q", want)
+	row := blockedRow(t, body, "orders")
+	for _, want := range []string{"schedule", "release train", "in 50m"} {
+		if !strings.Contains(row, want) {
+			t.Errorf("blocked row missing %q:\n%s", want, row)
 		}
 	}
 }

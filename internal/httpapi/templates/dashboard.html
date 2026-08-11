@@ -114,53 +114,52 @@
   }
 
   /* --- blocked gates: solid, unmissable --- */
-  .blocked { display: grid; gap: 0.6rem; padding: 2rem 0 0; }
-  .gate {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 0.35rem 1.5rem;
-    padding: 1.1rem 1.25rem 1.15rem;
+  .blocked { padding: 2.25rem 0 0; }
+  .gate-table {
+    width: 100%;
+    border-collapse: collapse;
     background: var(--panel);
     border: 1px solid var(--rule);
-    border-left: 4px solid var(--accent);
     border-radius: 2px;
+    font-size: 0.85rem;
+    text-align: left;
   }
-  .gate--frozen { --accent: var(--frozen); }
-  .gate--tripped { --accent: var(--tripped); }
-  .gate-id {
-    font-family: var(--mono);
-    font-size: 1.05rem;
+  .gate-table th {
+    font-size: 0.62rem;
     font-weight: 600;
-    overflow-wrap: anywhere;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--ink-soft);
+    white-space: nowrap;
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid var(--rule);
   }
-  .gate-id .sep { color: var(--ink-soft); margin: 0 0.15em; font-weight: 400; }
-  .gate-state {
+  .gate-table td {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  .gate-table tr:last-child td { border-bottom: 0; }
+  /* The state colour runs down the left edge of its own row. */
+  .gate-table tbody tr { --accent: var(--frozen); }
+  .gate-table tbody tr.is-tripped { --accent: var(--tripped); }
+  .gate-table td:first-child {
+    border-left: 4px solid var(--accent);
+    font-family: var(--mono);
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .gate-table .env { font-family: var(--mono); color: var(--ink); }
+  .gate-table .state {
     font-size: 0.7rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.16em;
     color: var(--accent);
     white-space: nowrap;
-    align-self: center;
   }
-  .gate-meta {
-    grid-column: 1 / -1;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem 1.1rem;
-    margin: 0.3rem 0 0;
-    font-size: 0.82rem;
-    color: var(--ink-soft);
-  }
-  .gate-meta > div { display: flex; gap: 0.4rem; }
-  .gate-meta dt {
-    font-size: 0.66rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    padding-top: 0.14rem;
-    opacity: 0.75;
-  }
-  .gate-meta dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+  .gate-table .reason { min-width: 14rem; color: var(--ink); }
+  .gate-table .soft { color: var(--ink-soft); white-space: nowrap; }
 
   /* --- open gates: deliberately quiet --- */
   .open-block { padding: 2.25rem 0 0; }
@@ -235,19 +234,27 @@
 
     {{if .Blocked}}
     <section class="blocked">
-      {{range .Blocked}}
-      <article class="gate gate--{{.State}}">
-        <p class="gate-id"><span>{{.Service}}</span><span class="sep">/</span><span>{{.Env}}</span></p>
-        <p class="gate-state">{{.State}}</p>
-        <dl class="gate-meta">
-          {{if .Reason}}<div><dt>reason</dt><dd>{{.Reason}}</dd></div>{{end}}
-          {{if .Source}}<div><dt>source</dt><dd>{{.Source}}</dd></div>{{end}}
-          {{if .Actor}}<div><dt>by</dt><dd>{{.Actor}}</dd></div>{{end}}
-          {{if .Age}}<div><dt>since</dt><dd><span title="{{.Stamp}}">{{.Age}}</span></dd></div>{{end}}
-          {{if .Expires}}<div><dt>lifts</dt><dd><span title="{{.ExpiresStamp}}">{{.Expires}}</span></dd></div>{{end}}
-        </dl>
-      </article>
-      {{end}}
+      <!-- No section heading: the verdict above already names this count. -->
+      <div class="table-wrap">
+        <table class="gate-table">
+          <thead>
+            <tr>
+              <th scope="col">Service</th>
+              <th scope="col">Environment</th>
+              <th scope="col">State</th>
+              <th scope="col">Source</th>
+              <th scope="col">Reason</th>
+              <th scope="col">By</th>
+              <th scope="col">Since</th>
+              <th scope="col">Lifts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Blocked}}<tr{{if eq .State "tripped"}} class="is-tripped"{{end}}><td>{{.Service}}</td><td class="env">{{.Env}}</td><td class="state">{{.State}}</td><td class="soft">{{dash .Source}}</td><td class="reason">{{dash .Reason}}</td><td class="soft">{{dash .Actor}}</td><td class="soft" title="{{.Stamp}}">{{dash .Age}}</td><td class="soft" title="{{.ExpiresStamp}}">{{dash .Expires}}</td></tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
     </section>
     {{end}}
 
