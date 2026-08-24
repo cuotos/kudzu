@@ -120,6 +120,42 @@ groups immediately. Without the App, a trip is simply caught by the next
 | `GITHUB_APP_PRIVATE_KEY` or `GITHUB_APP_PRIVATE_KEY_FILE` | – | PEM inline or file path |
 | `GITHUB_API_BASE_URL` | `https://api.github.com/` | set to `https://HOST/api/v3/` for GHES |
 
+## The Kudzu Gate action
+
+The consumer-side half of Kudzu is a composite action, published to the GitHub
+Marketplace from [`action.yml`](action.yml) at the root of this repo. It asks one
+gate whether deploys are allowed and exits non-zero when they are not, which
+fails the required check and ejects the pull request from the merge queue.
+
+```yaml
+name: Merge Queue Gate
+on:
+  merge_group: {}
+
+jobs:
+  kudzu-gate:                          # must equal REQUIRED_CHECK_CONTEXT
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cuotos/kudzu@v0
+        with:
+          url: ${{ vars.KUDZU_URL }}
+          service: ${{ github.event.repository.name }}
+          env: production
+          token: ${{ secrets.KUDZU_TOKEN }}   # only if read auth is on
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `url` | yes | – | Base URL of the Kudzu service. |
+| `service` | no | the repository name | Service half of the gate key. |
+| `env` | no | `production` | Environment half of the gate key. |
+| `token` | no | – | Bearer token, needed only when `KUDZU_REQUIRE_READ_AUTH` is on. |
+
+Pin `@v0` to track the latest `v0.x`, or a full tag like `@v0.4.0` to freeze.
+Releases move the floating major and minor git tags, so `@v0` follows along.
+
+The action needs `curl` and `jq`, both present on GitHub-hosted runners.
+
 ## Wiring up a repo
 
 1. Enable the merge queue on the trunk branch ruleset.
@@ -206,5 +242,6 @@ internal/github    GitHub App evicter (gate.Evicter)
 internal/httpapi   router, handlers, bearer auth, logging/metrics middleware, UI
 internal/observability  Prometheus metrics + live gate-state collector
 deploy             Dockerfile + Helm chart
-github             composite "Kudzu Gate" action + example workflows
+action.yml         the "Kudzu Gate" composite action (root: required by Marketplace)
+github             example consumer workflows
 ```
