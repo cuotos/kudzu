@@ -1,0 +1,32 @@
+{{- include "kudzu.redis.validatePersistence" . -}}
+{{- if and .Values.redis.enabled .Values.redis.persistence.enabled }}
+{{- if not (or .Values.redis.persistence.volume .Values.redis.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "kudzu.redis.claimName" . }}
+  labels:
+    {{- include "kudzu.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+  {{- if or .Values.redis.persistence.keepOnUninstall .Values.redis.persistence.annotations }}
+  annotations:
+    {{- if .Values.redis.persistence.keepOnUninstall }}
+    helm.sh/resource-policy: keep
+    {{- end }}
+    {{- with .Values.redis.persistence.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml .Values.redis.persistence.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.redis.persistence.size | quote }}
+  {{- if eq .Values.redis.persistence.storageClass "-" }}
+  storageClassName: ""
+  {{- else if .Values.redis.persistence.storageClass }}
+  storageClassName: {{ .Values.redis.persistence.storageClass | quote }}
+  {{- end }}
+{{- end }}
+{{- end }}

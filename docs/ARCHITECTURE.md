@@ -260,7 +260,7 @@ the README's configuration table for the full env-var list.
 ## 5. Deploy & CI surface (non-Go)
 
 - **`deploy/Dockerfile`** — multi-stage, cross-compiled (`BUILDPLATFORM` + `CGO_ENABLED=0`), static stripped binary on `distroless/static:nonroot`.
-- **`deploy/helm/kudzu/`** — chart: `deployment`, `service`, `hpa`, `ingress` (or a Gateway API `httproute` as an alternative), `networkpolicy`, `servicemonitor`, and a bundled single-node `redis` (no persistence; disable for prod). `values.yaml` documents every knob; secrets come from a pre-existing `kudzu-secrets` Secret.
+- **`deploy/helm/kudzu/`** — chart: `deployment`, `service`, `hpa`, `ingress` (or a Gateway API `httproute` as an alternative), `networkpolicy`, `servicemonitor`, and a bundled single-node `redis` (in-memory by default; `redis.persistence` can back it with any volume you supply, or disable it for prod and use an external Redis). `values.yaml` documents every knob; secrets come from a pre-existing `kudzu-secrets` Secret.
 - **`action.yml`** — the composite "Kudzu Gate" action: curls `GET /v1/gate`, reads `.allowed`, exits 0 (merge) or 1 (eject). It sits at the **repository root** because GitHub Marketplace only lists an action whose metadata file is there; moving it back into a subdirectory delists it. `github/examples/` has the merge-queue gate and deploy-failure hook workflows.
 - **`docker-compose.yml`** — local Kudzu + Redis stack (eviction disabled).
 - **`Makefile`** — `build` / `test` / `vet` / `tidy` / `run` / `up` / `down` / `docker`.
