@@ -79,3 +79,38 @@ jobs:
 
           echo "Pushing kudzu-${CHART_VERSION}.tgz to ${OCI}"
           helm push "kudzu-${CHART_VERSION}.tgz" "${OCI}"
+
+  # Published actions are consumed by git ref, not by image tag, so the floating
+  # major/minor *git* tags have to move too — `uses: cuotos/kudzu@v0` resolves
+  # against these. Kept in its own job because it needs contents: write.
+  floating-tags:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Move the floating major/minor tags to this release
+        env:
+          VERSION: ${{ github.event.release.tag_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # Pre-releases keep only their exact tag, matching the image retagging.
+          if [[ ! "${VERSION}" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "Pre-release/non-semver tag ${VERSION}; leaving floating tags alone"
+            exit 0
+          fi
+          MAJOR="v${BASH_REMATCH[1]}"
+          MINOR="v${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          for tag in "${MAJOR}" "${MINOR}"; do
+            echo "Pointing ${tag} at ${SHA}"
+            git tag -f -a "${tag}" -m "Release ${VERSION}" "${SHA}"
+            git push -f origin "refs/tags/${tag}"
+          done

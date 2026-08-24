@@ -1,8 +1,15 @@
 # Composite action that asks Kudzu whether deploys are allowed for a service/env.
 # Drop this into a merge_group-triggered workflow; on a block it exits non-zero,
 # the required check fails, and GitHub ejects the PR from the merge queue.
+#
+# This file lives at the repository root because GitHub Marketplace only lists an
+# action whose metadata is there. Moving it breaks the listing.
 name: Kudzu Gate
 description: Block the merge queue when Kudzu reports deploys are not allowed.
+author: cuotos
+branding:
+  icon: lock
+  color: green
 inputs:
   url:
     description: Base URL of the Kudzu service (e.g. https://kudzu.internal.example.com)

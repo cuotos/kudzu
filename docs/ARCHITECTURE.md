@@ -74,7 +74,8 @@ internal/
   observability/           Prometheus registry, HTTP instruments, live gate collector
   config/                  load Config from environment variables
 deploy/                    Dockerfile + Helm chart
-github/                    composite "Kudzu Gate" action + example workflows
+action.yml                 the "Kudzu Gate" composite action (must stay at the root)
+github/                    example consumer workflows
 docker-compose.yml         local Kudzu + Redis stack
 Makefile                   build / test / run / docker targets
 ```
@@ -260,7 +261,7 @@ the README's configuration table for the full env-var list.
 
 - **`deploy/Dockerfile`** — multi-stage, cross-compiled (`BUILDPLATFORM` + `CGO_ENABLED=0`), static stripped binary on `distroless/static:nonroot`.
 - **`deploy/helm/kudzu/`** — chart: `deployment`, `service`, `hpa`, `ingress` (or a Gateway API `httproute` as an alternative), `networkpolicy`, `servicemonitor`, and a bundled single-node `redis` (no persistence; disable for prod). `values.yaml` documents every knob; secrets come from a pre-existing `kudzu-secrets` Secret.
-- **`github/action.yml`** — the composite "Kudzu Gate" action: curls `GET /v1/gate`, reads `.allowed`, exits 0 (merge) or 1 (eject). `github/examples/` has the merge-queue gate and deploy-failure hook workflows.
+- **`action.yml`** — the composite "Kudzu Gate" action: curls `GET /v1/gate`, reads `.allowed`, exits 0 (merge) or 1 (eject). It sits at the **repository root** because GitHub Marketplace only lists an action whose metadata file is there; moving it back into a subdirectory delists it. `github/examples/` has the merge-queue gate and deploy-failure hook workflows.
 - **`docker-compose.yml`** — local Kudzu + Redis stack (eviction disabled).
 - **`Makefile`** — `build` / `test` / `vet` / `tidy` / `run` / `up` / `down` / `docker`.
 - **`.github/workflows/`** — `build.yml` (CI) and `release.yml` (multi-arch images + OCI Helm chart to GHCR).
