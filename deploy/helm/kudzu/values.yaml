@@ -20,9 +20,9 @@ config:
     db: 0
 
 # Bundled single-node Redis (Deployment + Service). Convenient for getting
-# started; state is in-memory only (no persistence), so a Redis restart clears
-# all gates. For production, disable this and point config.redis.addr at an
-# external/HA Redis.
+# started. By default state is in-memory only, so a Redis restart clears all
+# gates; enable persistence below to survive restarts. For production, consider
+# disabling this and pointing config.redis.addr at an external/HA Redis.
 redis:
   enabled: true
   image:
@@ -30,6 +30,48 @@ redis:
     tag: "7-alpine"
     pullPolicy: IfNotPresent
   port: 6379
+
+  # Redis server args. Empty means the chart chooses based on
+  # persistence.enabled: AOF on when persisting, fully in-memory when not.
+  # Override to tune durability, e.g. RDB snapshots instead of the AOF (much
+  # gentler on network filesystems):
+  #   args: ["--save", "60 1000", "--appendonly", "no"]
+  args: []
+
+  # Persist /data across Redis restarts. The chart is deliberately agnostic
+  # about *how* - it only needs a volume. Pick exactly one of the three routes
+  # below; the chart fails the render if you set more than one.
+  persistence:
+    enabled: false
+
+    # Route A - let the chart create a PersistentVolumeClaim for you. This is
+    # the usual choice: name a StorageClass and your CSI driver does the rest.
+    #   AWS EFS:  storageClass: efs-sc, accessModes: [ReadWriteMany]
+    #   EBS/GCE PD/etc: leave accessModes at [ReadWriteOnce]
+    # storageClass: "" uses the cluster default; "-" disables dynamic
+    # provisioning so the claim binds to a PV you created by hand.
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 1Gi
+    annotations: {}
+    # Keep the PVC (and your gate state) behind after `helm uninstall`.
+    keepOnUninstall: true
+
+    # Route B - a PVC you created out of band. The chart creates no PVC and
+    # just mounts this claim.
+    existingClaim: ""
+
+    # Route C - escape hatch. A raw volume spec, spliced verbatim into the
+    # pod's `volumes:` entry. For anything the two routes above cannot express,
+    # e.g. an inline CSI volume or a plain NFS mount:
+    #   volume:
+    #     csi:
+    #       driver: efs.csi.aws.com
+    #       volumeAttributes:
+    #         fileSystemId: fs-0123456789abcdef0
+    volume: {}
+
   resources:
     requests:
       cpu: 25m

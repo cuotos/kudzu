@@ -216,8 +216,9 @@ and NetworkPolicy.
 ### Redis: bundled vs external
 
 The chart bundles a single-node Redis (`redis.enabled: true`, the default) to
-get you running quickly. It has **no persistence** — a Redis restart clears all
-gate state (freezes, trips, schedules) — so treat it as convenient, not durable.
+get you running quickly. Out of the box it has **no persistence** — a Redis
+restart clears all gate state (freezes, trips, schedules). You can either give
+it a volume (below) or point Kudzu at an external Redis.
 
 For production, disable the bundled Redis and point Kudzu at an external/HA
 (and ideally persistent) Redis:
@@ -230,6 +231,72 @@ helm upgrade --install kudzu oci://ghcr.io/cuotos/charts/kudzu --version <X.Y.Z>
 
 When `redis.enabled` is true, `REDIS_ADDR` is derived from the bundled Service
 and `config.redis.addr` is ignored.
+
+### Persisting the bundled Redis
+
+`redis.persistence` gives the bundled Redis a volume for `/data`, so gate state
+survives a restart. The chart is deliberately agnostic about *where* that
+storage comes from — it only needs a volume, and which CSI driver, filesystem
+or backing PV provides it is entirely yours to choose. There are three routes;
+set exactly one, or the render fails rather than silently picking for you.
+
+**A. Let the chart create a PVC.** The common case — name a StorageClass and
+your CSI driver does the rest. For AWS EFS:
+
+```sh
+helm upgrade --install kudzu oci://ghcr.io/cuotos/charts/kudzu --version <X.Y.Z> \
+  --set redis.persistence.enabled=true \
+  --set redis.persistence.storageClass=efs-sc \
+  --set 'redis.persistence.accessModes[0]=ReadWriteMany' \
+  --set redis.persistence.size=1Gi
+```
+
+Set `storageClass: "-"` instead to skip dynamic provisioning and bind to a PV
+you created by hand. The PVC carries `helm.sh/resource-policy: keep` by default
+(`redis.persistence.keepOnUninstall`), so `helm uninstall` leaves your data
+behind.
+
+**B. Bring your own PVC.** The chart creates nothing and mounts what you name:
+
+```yaml
+redis:
+  persistence:
+    enabled: true
+    existingClaim: kudzu-redis-data
+```
+
+**C. Bring your own volume spec.** The escape hatch, for anything the routes
+above cannot express. Spliced verbatim into the pod's `volumes:` entry:
+
+```yaml
+redis:
+  persistence:
+    enabled: true
+    volume:
+      csi:
+        driver: efs.csi.aws.com
+        volumeAttributes:
+          fileSystemId: fs-0123456789abcdef0
+```
+
+Two things to know regardless of route:
+
+- The Redis Deployment is pinned to one replica with `strategy: Recreate`. Two
+  Redis processes sharing one `/data` would corrupt each other's AOF, so a
+  `ReadWriteMany` volume does **not** mean you can scale it up.
+- Enabling persistence switches Redis to the AOF
+  (`--appendonly yes --appendfsync everysec`). On a network filesystem like EFS
+  that fsync is noticeably slower than local disk; RDB snapshots are gentler,
+  and `redis.args` overrides the args entirely:
+
+  ```yaml
+  redis:
+    args: ["--save", "60 1000", "--appendonly", "no"]
+  ```
+
+On EFS specifically, the pod runs as uid/gid 999 with `fsGroup: 999`. If your
+PV uses an EFS access point, give it POSIX uid/gid 999 (or matching ownership
+on the exported directory) or Redis will not be able to write `/data`.
 
 ## Layout
 
