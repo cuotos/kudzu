@@ -210,6 +210,15 @@
     border-radius: 2px;
     padding: 0.05rem 0.3rem;
   }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    margin: 0 0 0.7rem;
+  }
+  .section-head .section-label { margin: 0; }
+
+{{if .Writes}}
   /* --- controls: present in the markup, revealed once a token is held --- */
   .act, .add, .signed-only { display: none; }
   body[data-signed-in] .act,
@@ -225,6 +234,7 @@
   }
   .act, .add, .session {
     align-items: center;
+    text-decoration: none;
     font-family: var(--mono);
     font-size: 0.7rem;
     letter-spacing: 0.04em;
@@ -245,14 +255,8 @@
      with JS off the button never appears, because it would do nothing. */
   .session[hidden] { display: none; }
   .bar-stamp { margin-left: auto; }
-  .section-head {
-    display: flex;
-    align-items: baseline;
-    gap: 0.75rem;
-    margin: 0 0 0.7rem;
-  }
-  .section-head .section-label { margin: 0; }
   .gate-table td.actions, .open-table td.actions { text-align: right; }
+{{end}}
 
   /* --- schedules: the quiet middle ground between blocked and open --- */
   .sched-block { padding: 2.25rem 0 0; }
@@ -293,6 +297,7 @@
     white-space: nowrap;
   }
 
+{{if .Writes}}
   /* --- dialogs --- */
   dialog {
     background: var(--panel);
@@ -372,6 +377,7 @@
     border-radius: 2px;
   }
   .oops[hidden] { display: none; }
+{{end}}
 
   a { color: inherit; }
   a:focus-visible, [tabindex]:focus-visible {
@@ -385,7 +391,7 @@
   <header class="bar" id="bar" data-mood="{{.Mood}}">
     <span class="wordmark">kudzu</span>
     <span class="bar-meta">gate board</span>
-    <button type="button" class="session" id="session" hidden>sign in</button>
+    {{if .Writes}}<button type="button" class="session" id="session" hidden>sign in</button>{{end}}
     <span class="bar-stamp">{{.Tracked}} &middot; {{.Updated}}</span>
   </header>
 
@@ -411,11 +417,11 @@
               <th scope="col">By</th>
               <th scope="col">Since</th>
               <th scope="col">Lifts</th>
-              <th scope="col"><span class="signed-only">Action</span></th>
+              {{if .Writes}}<th scope="col"><span class="signed-only">Action</span></th>{{end}}
             </tr>
           </thead>
           <tbody>
-            {{range .Blocked}}<tr{{if eq .State "tripped"}} class="is-tripped"{{end}}><td>{{.Service}}</td><td class="env">{{.Env}}</td><td class="state">{{.State}}</td><td class="soft">{{dash .Source}}</td><td class="reason">{{dash .Reason}}</td><td class="soft">{{dash .Actor}}</td><td class="soft" title="{{.Stamp}}">{{dash .Age}}</td><td class="soft" title="{{.ExpiresStamp}}">{{dash .Expires}}</td><td class="actions"><button type="button" class="act" data-act="unfreeze" data-service="{{.Service}}" data-env="{{.Env}}">unfreeze</button></td></tr>
+            {{range .Blocked}}<tr{{if eq .State "tripped"}} class="is-tripped"{{end}}><td>{{.Service}}</td><td class="env">{{.Env}}</td><td class="state">{{.State}}</td><td class="soft">{{dash .Source}}</td><td class="reason">{{dash .Reason}}</td><td class="soft">{{dash .Actor}}</td><td class="soft" title="{{.Stamp}}">{{dash .Age}}</td><td class="soft" title="{{.ExpiresStamp}}">{{dash .Expires}}</td>{{if $.Writes}}<td class="actions">{{if eq .Source "schedule"}}<a class="act" href="#windows">window &darr;</a>{{else}}<button type="button" class="act" data-act="unfreeze" data-service="{{.Service}}" data-env="{{.Env}}">unfreeze</button>{{end}}</td>{{end}}</tr>
             {{end}}
           </tbody>
         </table>
@@ -431,10 +437,10 @@
       <div class="table-wrap">
         <table class="open-table">
           <thead>
-            <tr><th scope="col">Service</th><th scope="col">Environment</th><th scope="col"><span class="signed-only">Action</span></th></tr>
+            <tr><th scope="col">Service</th><th scope="col">Environment</th>{{if .Writes}}<th scope="col"><span class="signed-only">Action</span></th>{{end}}</tr>
           </thead>
           <tbody>
-            {{range .Open}}<tr><td>{{.Service}}</td><td>{{.Env}}</td><td class="actions"><button type="button" class="act" data-act="freeze" data-service="{{.Service}}" data-env="{{.Env}}">freeze</button></td></tr>
+            {{range .Open}}<tr><td>{{.Service}}</td><td>{{.Env}}</td>{{if $.Writes}}<td class="actions"><button type="button" class="act" data-act="freeze" data-service="{{.Service}}" data-env="{{.Env}}">freeze</button></td>{{end}}</tr>
             {{end}}
           </tbody>
         </table>
@@ -442,10 +448,10 @@
     </section>
     {{end}}
 
-    <section class="sched-block">
+    <section class="sched-block" id="windows">
       <div class="section-head">
         <h2 class="section-label">freeze windows{{if .Schedules}} &middot; {{len .Schedules}}{{end}}</h2>
-        <button type="button" class="add" data-act="new-schedule">add window</button>
+        {{if .Writes}}<button type="button" class="add" data-act="new-schedule">add window</button>{{end}}
       </div>
       {{if .Schedules}}
       <div class="table-wrap">
@@ -458,11 +464,11 @@
               <th scope="col">Reason</th>
               <th scope="col">Now</th>
               <th scope="col">Lifts</th>
-              <th scope="col"><span class="signed-only">Action</span></th>
+              {{if .Writes}}<th scope="col"><span class="signed-only">Action</span></th>{{end}}
             </tr>
           </thead>
           <tbody>
-            {{range .Schedules}}<tr{{if .Active}} class="is-active"{{end}}><td>{{.Service}}</td><td>{{.Env}}</td><td class="window">{{dash .Window}}</td><td class="reason">{{dash .Reason}}</td><td class="now">{{if .Active}}in force{{else}}&mdash;{{end}}</td><td class="window" title="{{.Stamp}}">{{dash .Lifts}}</td><td class="actions"><button type="button" class="act" data-act="delete-schedule" data-service="{{.Service}}" data-env="{{.Env}}" data-id="{{.ID}}">delete</button></td></tr>
+            {{range .Schedules}}<tr{{if .Active}} class="is-active"{{end}}><td>{{.Service}}</td><td>{{.Env}}</td><td class="window">{{dash .Window}}</td><td class="reason">{{dash .Reason}}</td><td class="now">{{if .Active}}in force{{else}}&mdash;{{end}}</td><td class="window" title="{{.Stamp}}">{{dash .Lifts}}</td>{{if $.Writes}}<td class="actions"><button type="button" class="act" data-act="delete-schedule" data-service="{{.Service}}" data-env="{{.Env}}" data-id="{{.ID}}">delete</button></td>{{end}}</tr>
             {{end}}
           </tbody>
         </table>
@@ -472,6 +478,7 @@
       {{end}}
     </section>
 
+    {{if .Writes}}
     <p class="foot">
       <span class="signed-only">
         <button type="button" class="add" data-act="new-freeze">freeze a gate&hellip;</button>
@@ -479,11 +486,15 @@
       Sign in with a <code>KUDZU_WRITE_TOKENS</code> value to freeze, unfreeze and manage windows from here.
       The same actions are available as <code>POST /v1/gate/freeze</code>, <code>POST /v1/gate/unfreeze</code> and <code>/v1/schedules</code>.
     </p>
+    {{else}}
+    <p class="foot">Read-only. Freeze with <code>POST /v1/gate/freeze</code>, clear with <code>POST /v1/gate/unfreeze</code>, declare windows with <code>/v1/schedules</code>. Set <code>KUDZU_UI_WRITES=true</code> to do it from here.</p>
+    {{end}}
   </main>
 
-  <p class="oops" id="oops" hidden></p>
+  {{if .Writes}}<p class="oops" id="oops" hidden></p>{{end}}
 </div>
 
+{{if .Writes}}
 <!-- Dialogs live outside #board so the 15s refresh cannot rip an open one out
      from under you. -->
 <dialog id="dlg-signin">
@@ -593,7 +604,40 @@
     </div>
   </form>
 </dialog>
+{{end}}
 
+<script>
+  // --- refresh ---------------------------------------------------------
+  // Re-fetch this page and swap in the fresh board, keeping scroll position.
+  // Without JS the page is simply static until reloaded. This runs whether or
+  // not the write controls exist; afterRefresh is how the interactive script
+  // below re-paints the bar the swap just replaced.
+  const afterRefresh = [];
+
+  // There are no dialogs at all with writes disabled, in which case this is
+  // simply always false.
+  const anyDialogOpen = () => document.querySelector("dialog[open]") !== null;
+
+  async function refresh() {
+    if (anyDialogOpen()) return; // never yank the page out from under a form
+    try {
+      const res = await fetch(location.pathname, { headers: { accept: "text/html" } });
+      if (!res.ok) return;
+      const doc = new DOMParser().parseFromString(await res.text(), "text/html");
+      for (const id of ["bar", "board"]) {
+        const next = doc.getElementById(id);
+        const current = document.getElementById(id);
+        if (next && current) current.replaceWith(next);
+      }
+      for (const fn of afterRefresh) fn();
+    } catch (err) {
+      /* offline or mid-deploy: leave the last good board on screen */
+    }
+  }
+  setInterval(refresh, 15000);
+</script>
+
+{{if .Writes}}
 <script>
   // --- session ---------------------------------------------------------
   // The write endpoints want a bearer token, and a browser has nowhere safe to
@@ -668,8 +712,6 @@
   }
 
   // --- dialogs ---------------------------------------------------------
-  const anyDialogOpen = () => $("dialog[open]") !== null;
-
   function openDialog(id, fill) {
     const dlg = $(id);
     const form = dlg.querySelector("form");
@@ -811,27 +853,11 @@
     return ["POST", "/v1/schedules", body];
   }));
 
-  // --- refresh ---------------------------------------------------------
-  // Re-fetch this page and swap in the fresh board, keeping scroll position.
-  // Without JS the page is simply static until reloaded.
-  async function refresh() {
-    if (anyDialogOpen()) return; // never yank the page out from under a form
-    try {
-      const res = await fetch(location.pathname, { headers: { accept: "text/html" } });
-      if (!res.ok) return;
-      const doc = new DOMParser().parseFromString(await res.text(), "text/html");
-      for (const id of ["bar", "board"]) {
-        const next = doc.getElementById(id);
-        const current = document.getElementById(id);
-        if (next && current) current.replaceWith(next);
-      }
-      paint();
-    } catch (err) {
-      /* offline or mid-deploy: leave the last good board on screen */
-    }
-  }
-  setInterval(refresh, 15000);
+  // The bar carrying the session button is replaced on every refresh, so the
+  // session has to be repainted afterwards.
+  afterRefresh.push(paint);
   paint();
 </script>
+{{end}}
 </body>
 </html>

@@ -246,6 +246,21 @@ JS drops the stored token and re-prompts. Row controls are wired by event
 delegation, since refresh swaps the rows out wholesale; the refresh skips a tick
 while a `<dialog>` is open so it cannot destroy a half-filled form.
 
+Whether any of that is rendered is `uiData.Writes`, from `KUDZU_UI_WRITES` via
+`Options.UIWrites` (default off). The flag is a template concern rather than a
+routing one: the controls, dialogs, their CSS and the whole session script sit
+behind `{{if .Writes}}`, so the read-only page has nothing to press instead of
+something hidden. The auto-refresh is deliberately outside that gate, in its own
+`<script>`, and the interactive block hooks into it through an `afterRefresh`
+array — the page refreshes identically in both modes.
+
+A blocked row whose `Source` is `schedule` gets no `unfreeze` button, only a
+link to the freeze windows table. `Unfreeze` clears a manual freeze and resets a
+trip; it cannot cancel an active window, so the gate would recompute from the
+schedule and freeze straight back. Deleting the window is the real lever, and is
+too blunt to be a one-click action on a gate row — it would throw away a
+recurring rule to unblock a single occurrence.
+
 **`handlers_test.go`, `ui_test.go`, `docs_test.go`** — HTTP-level tests driving a
 real `gate.Service` over the in-memory store. `docs_test.go` also holds the three
 drift guards: route coverage both ways, auth agreement, and schema fields

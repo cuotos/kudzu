@@ -68,6 +68,11 @@ type uiData struct {
 	Open     []uiGate
 
 	Schedules []uiSchedule
+
+	// Writes renders the freeze/unfreeze/schedule controls. When false the
+	// page carries no controls, no dialogs and no session script at all, so
+	// there is nothing to press rather than something merely hidden.
+	Writes bool
 }
 
 // handleUI renders the gate board.
@@ -86,8 +91,11 @@ func (s *Server) handleUI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Render to a buffer so a template error cannot emit half a page.
+	d := buildDashboard(gates, schedules, time.Now())
+	d.Writes = s.uiWrites
+
 	var buf bytes.Buffer
-	if err := dashboardTmpl.Execute(&buf, buildDashboard(gates, schedules, time.Now())); err != nil {
+	if err := dashboardTmpl.Execute(&buf, d); err != nil {
 		s.log.Error("dashboard render failed", "err", err)
 		http.Error(w, "kudzu: cannot render dashboard", http.StatusInternalServerError)
 		return

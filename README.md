@@ -71,12 +71,17 @@ behind a strict CSP.
 
 ### Acting from the board
 
-Out of the box the board is read-only: no buttons, nothing to press. Click
-**sign in**, paste a value from `KUDZU_WRITE_TOKENS` and give your name, and the
-controls appear — freeze and unfreeze per gate, freeze a service/environment
-Kudzu has never seen, and add or delete freeze windows. They call the same
-authenticated endpoints listed above; your name is sent as the `actor`, so the
-board still records who did what.
+The board is read-only unless you ask for otherwise. Set **`KUDZU_UI_WRITES=true`**
+and it grows a **sign in** button: paste a value from `KUDZU_WRITE_TOKENS`, give
+your name, and the controls appear — freeze and unfreeze per gate, freeze a
+service/environment Kudzu has never seen, and add or delete freeze windows. They
+call the same authenticated endpoints listed above; your name is sent as the
+`actor`, so the board still records who did what.
+
+With `KUDZU_UI_WRITES` unset the page carries no controls, no dialogs and no
+session script at all — there is nothing to press, rather than something merely
+hidden. It defaults off because using it means pasting a write token into a
+browser, which should be a decision rather than something an upgrade hands you.
 
 The token is held in `sessionStorage` and is gone when you close the tab; your
 name is remembered in `localStorage`. Two consequences worth knowing:
@@ -85,9 +90,15 @@ name is remembered in `localStorage`. Two consequences worth knowing:
   third-party JS and escapes every stored field through `html/template`, but a
   browser is still a worse place to keep a write token than a CI secret store.
 - Because the check is client-side, the server cannot tell a signed-in browser
-  from a signed-out one. The buttons are always in the HTML and simply return
-  `401` if pressed without a valid token — the authorisation itself is entirely
-  server-side, as before.
+  from a signed-out one. With the controls enabled the buttons are always in the
+  HTML and simply return `401` if pressed without a valid token — the
+  authorisation itself is entirely server-side, as before.
+
+One gap the controls are honest about: **a gate frozen by a schedule has no
+unfreeze button**, because `POST /v1/gate/unfreeze` clears a manual freeze and
+resets a trip but does not cancel an active window — the gate would recompute
+from the schedule and freeze straight back. Those rows link down to the freeze
+windows table instead, where the window itself can be deleted.
 
 It is served under the same auth rules as the other read endpoints, so with
 `KUDZU_REQUIRE_READ_AUTH=true` a browser cannot load it (browsers do not send
@@ -134,6 +145,7 @@ groups immediately. Without the App, a trip is simply caught by the next
 | `REDIS_ADDR` / `REDIS_PASSWORD` / `REDIS_DB` | `localhost:6379` / – / `0` | state store |
 | `KUDZU_WRITE_TOKENS` | – | comma-separated bearer tokens for write endpoints (fail-closed if empty) |
 | `KUDZU_REQUIRE_READ_AUTH` | `false` | also require a token on reads |
+| `KUDZU_UI_WRITES` | `false` | reveal the gate board's freeze/unfreeze/window controls |
 | `BREAKER_FAILURE_THRESHOLD` | `1` | consecutive failures that trip the breaker |
 | `REQUIRED_CHECK_CONTEXT` | `kudzu-gate` | commit-status context used for eviction; must match the required check name |
 | `GITHUB_APP_ID` / `GITHUB_APP_INSTALLATION_ID` | – | enable eviction |

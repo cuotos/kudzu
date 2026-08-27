@@ -32,6 +32,9 @@ type GateService interface {
 type Server struct {
 	svc GateService
 	log *slog.Logger
+	// uiWrites reveals the gate board's write controls. It gates the rendered
+	// page only; the write endpoints are authorised the same way regardless.
+	uiWrites bool
 }
 
 func newServer(svc GateService, log *slog.Logger) *Server {

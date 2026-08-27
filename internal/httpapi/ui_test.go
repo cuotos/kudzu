@@ -209,7 +209,7 @@ func TestDashboardShowsFreezeTTL(t *testing.T) {
 		t.Errorf("expected the TTL in the orders row, got:\n%s", row)
 	}
 	// The gate with no TTL keeps the column, filled with an em dash.
-	if row := blockedRow(t, body, "billing"); !strings.Contains(row, "<td class=\"soft\" title=\"\">—</td><td class=\"actions\">") {
+	if row := blockedRow(t, body, "billing"); !strings.HasSuffix(row, "<td class=\"soft\" title=\"\">—</td></tr>") {
 		t.Errorf("expected an empty lifts cell for billing, got:\n%s", row)
 	}
 }
@@ -295,16 +295,27 @@ func TestAgeLabels(t *testing.T) {
 	}
 }
 
-// scheduleRow returns the schedules-table row carrying id. Each row is rendered
-// on its own source line, as the gate rows are.
-func scheduleRow(t *testing.T, body, id string) string {
+// newUIWritesRouter is the router with the board's write controls enabled.
+func newUIWritesRouter() http.Handler {
+	svc := gate.NewService(memory.New(), gate.NoopEvicter{}, gate.Config{FailureThreshold: 1}, nil)
+	return NewRouter(Options{
+		Service:     svc,
+		WriteTokens: []string{testToken},
+		UIWrites:    true,
+	})
+}
+
+// scheduleRow returns the schedules-table row for a service. Each row is
+// rendered on its own source line, as the gate rows are. It matches on the
+// window cell rather than on a control, so it works with writes on or off.
+func scheduleRow(t *testing.T, body, service string) string {
 	t.Helper()
 	for line := range strings.SplitSeq(body, "\n") {
-		if strings.Contains(line, `data-id="`+id+`"`) {
+		if strings.Contains(line, "<td>"+service+"</td>") && strings.Contains(line, `class="window"`) {
 			return line
 		}
 	}
-	t.Fatalf("no schedule row for %q in:\n%s", id, body)
+	t.Fatalf("no schedule row for %q in:\n%s", service, body)
 	return ""
 }
 
@@ -324,14 +335,14 @@ func TestDashboardListsScheduleWindows(t *testing.T) {
 
 	_, body := getHTML(t, h, "/ui", "")
 
-	friday := scheduleRow(t, body, "friday")
+	friday := scheduleRow(t, body, "orders")
 	for _, want := range []string{"orders", "production", "0 18 * * 5", "12h", "no friday deploys"} {
 		if !strings.Contains(friday, want) {
 			t.Errorf("recurring row missing %q: %s", want, friday)
 		}
 	}
 
-	xmas := scheduleRow(t, body, "xmas")
+	xmas := scheduleRow(t, body, "billing")
 	if !strings.Contains(xmas, "is-active") {
 		t.Errorf("in-force window not marked active: %s", xmas)
 	}
@@ -341,15 +352,15 @@ func TestDashboardListsScheduleWindows(t *testing.T) {
 }
 
 func TestDashboardScheduleRowsCarryDeleteControls(t *testing.T) {
-	h := newTestRouter()
+	h := newUIWritesRouter()
 	do(t, h, http.MethodPost, "/v1/schedules", testToken, map[string]any{
 		"service": "orders", "env": "production", "id": "friday",
 		"cron": "0 18 * * 5", "duration_seconds": 3600,
 	})
 
 	_, body := getHTML(t, h, "/ui", "")
-	row := scheduleRow(t, body, "friday")
-	for _, want := range []string{`data-act="delete-schedule"`, `data-service="orders"`, `data-env="production"`} {
+	row := scheduleRow(t, body, "orders")
+	for _, want := range []string{`data-act="delete-schedule"`, `data-service="orders"`, `data-env="production"`, `data-id="friday"`} {
 		if !strings.Contains(row, want) {
 			t.Errorf("schedule row missing %q: %s", want, row)
 		}
@@ -357,7 +368,7 @@ func TestDashboardScheduleRowsCarryDeleteControls(t *testing.T) {
 }
 
 func TestDashboardGateRowsCarryFreezeAndUnfreezeControls(t *testing.T) {
-	h := newTestRouter()
+	h := newUIWritesRouter()
 	do(t, h, http.MethodPost, "/v1/gate/freeze", testToken,
 		map[string]any{"service": "orders", "env": "production", "reason": "incident", "actor": "dan"})
 	do(t, h, http.MethodPost, "/v1/deploy-result", testToken,
@@ -436,5 +447,92 @@ func TestBuildDashboardFormatsScheduleWindows(t *testing.T) {
 	}
 	if got := byID["xmas"].Lifts; got != "in 2h" {
 		t.Errorf("active window lifts = %q", got)
+	}
+}
+
+func TestDashboardOmitsUnfreezeOnScheduledFreeze(t *testing.T) {
+	h := newUIWritesRouter()
+	now := time.Now()
+
+	// A window in force right now, so the gate is frozen by the schedule.
+	do(t, h, http.MethodPost, "/v1/schedules", testToken, map[string]any{
+		"service": "orders", "env": "production", "id": "freeze-now",
+		"reason": "change freeze",
+		"start":  now.Add(-time.Hour).Format(time.RFC3339),
+		"end":    now.Add(time.Hour).Format(time.RFC3339),
+	})
+	// And a manual freeze on a different gate, which unfreeze *can* lift.
+	do(t, h, http.MethodPost, "/v1/gate/freeze", testToken,
+		map[string]any{"service": "billing", "env": "staging", "reason": "incident", "actor": "dan"})
+
+	_, body := getHTML(t, h, "/ui", "")
+
+	// Unfreeze clears a manual freeze and resets a trip, but a scheduled gate
+	// recomputes from its window and freezes straight back, so offering the
+	// button there would be a lie.
+	scheduled := blockedRow(t, body, "orders")
+	if strings.Contains(scheduled, `data-act="unfreeze"`) {
+		t.Errorf("scheduled freeze should carry no unfreeze control: %s", scheduled)
+	}
+	if !strings.Contains(scheduled, `href="#windows"`) {
+		t.Errorf("scheduled freeze should point at its window: %s", scheduled)
+	}
+
+	manual := blockedRow(t, body, "billing")
+	if !strings.Contains(manual, `data-act="unfreeze"`) {
+		t.Errorf("manual freeze should keep its unfreeze control: %s", manual)
+	}
+}
+
+func TestDashboardOmitsUnfreezeOnTrippedGateOnlyWhenScheduled(t *testing.T) {
+	h := newUIWritesRouter()
+	do(t, h, http.MethodPost, "/v1/deploy-result", testToken,
+		map[string]any{"service": "web", "env": "production", "status": "failed", "repo": "cuotos/web"})
+
+	_, body := getHTML(t, h, "/ui", "")
+	// Unfreeze resets a trip, so a tripped gate keeps the control.
+	if row := blockedRow(t, body, "web"); !strings.Contains(row, `data-act="unfreeze"`) {
+		t.Errorf("tripped gate should keep its unfreeze control: %s", row)
+	}
+}
+
+func TestDashboardHasNoControlsUnlessUIWritesIsOn(t *testing.T) {
+	h := newTestRouter() // KUDZU_UI_WRITES defaults off
+	do(t, h, http.MethodPost, "/v1/gate/freeze", testToken,
+		map[string]any{"service": "orders", "env": "production", "reason": "incident", "actor": "dan"})
+	do(t, h, http.MethodPost, "/v1/schedules", testToken, map[string]any{
+		"service": "orders", "env": "production", "cron": "0 18 * * 5", "duration_seconds": 3600,
+	})
+
+	_, body := getHTML(t, h, "/ui", "")
+	// Nothing to press, rather than something merely hidden: no controls, no
+	// dialogs, no session script.
+	for _, unwanted := range []string{"data-act=", "<dialog", `id="session"`, "sessionStorage", "kudzu.token"} {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("read-only board should not contain %q", unwanted)
+		}
+	}
+	if !strings.Contains(body, "KUDZU_UI_WRITES") {
+		t.Error("read-only board should say how to turn the controls on")
+	}
+	// The board still refreshes itself, and still lists windows.
+	if !strings.Contains(body, "setInterval(refresh, 15000)") {
+		t.Error("read-only board lost its auto-refresh")
+	}
+	if !strings.Contains(body, "0 18 * * 5") {
+		t.Error("read-only board lost its freeze windows")
+	}
+}
+
+func TestDashboardHasControlsWhenUIWritesIsOn(t *testing.T) {
+	h := newUIWritesRouter()
+	_, body := getHTML(t, h, "/ui", "")
+	for _, want := range []string{`id="session"`, "<dialog", "sessionStorage", `data-act="new-schedule"`, `data-act="new-freeze"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("interactive board missing %q", want)
+		}
+	}
+	if !strings.Contains(body, "setInterval(refresh, 15000)") {
+		t.Error("interactive board lost its auto-refresh")
 	}
 }

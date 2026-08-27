@@ -21,6 +21,7 @@ services:
       KUDZU_ADDR: ":8080"
       REDIS_ADDR: "redis:6379"
       KUDZU_WRITE_TOKENS: "local-dev-token"
+      KUDZU_UI_WRITES: "true"
       BREAKER_FAILURE_THRESHOLD: "1"
       REQUIRED_CHECK_CONTEXT: "kudzu-gate"
     depends_on:
