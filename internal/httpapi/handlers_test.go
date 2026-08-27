@@ -224,3 +224,61 @@ func TestHealthAndReady(t *testing.T) {
 		t.Fatalf("readyz: %d", rec.Code)
 	}
 }
+
+func TestDeleteGateRemovesItFromTheBoard(t *testing.T) {
+	h := newTestRouter()
+
+	// A test service someone froze by mistake, plus a window on it.
+	do(t, h, http.MethodPost, "/v1/gate/freeze", testToken,
+		map[string]any{"service": "my-test-svc", "env": "production", "reason": "oops", "actor": "dan"})
+	do(t, h, http.MethodPost, "/v1/schedules", testToken, map[string]any{
+		"service": "my-test-svc", "env": "production", "cron": "0 18 * * 5", "duration_seconds": 3600,
+	})
+	do(t, h, http.MethodPost, "/v1/deploy-result", testToken,
+		map[string]any{"service": "keep-me", "env": "production", "status": "success", "repo": "cuotos/keep-me"})
+
+	rec, _ := do(t, h, http.MethodDelete, "/v1/gate?service=my-test-svc&env=production", testToken, nil)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("delete: code=%d, want 204", rec.Code)
+	}
+
+	// Off the board, and its windows with it.
+	_, body := do(t, h, http.MethodGet, "/v1/gates", "", nil)
+	gates, _ := body["gates"].([]any)
+	for _, raw := range gates {
+		g, _ := raw.(map[string]any)
+		if g["service"] == "my-test-svc" {
+			t.Errorf("deleted gate still listed: %v", g)
+		}
+	}
+	if len(gates) != 1 {
+		t.Errorf("want only the untouched gate left, got %v", gates)
+	}
+	_, body = do(t, h, http.MethodGet, "/v1/schedules", "", nil)
+	if scs, _ := body["schedules"].([]any); len(scs) != 0 {
+		t.Errorf("windows survived: %v", scs)
+	}
+	// Reads open again, exactly as a gate nobody has ever touched does.
+	_, body = do(t, h, http.MethodGet, "/v1/gate?service=my-test-svc&env=production", "", nil)
+	if body["state"] != "open" || body["allowed"] != true {
+		t.Errorf("deleted gate should read open: %v", body)
+	}
+}
+
+func TestDeleteGateNeedsAuthAndAKey(t *testing.T) {
+	h := newTestRouter()
+
+	rec, _ := do(t, h, http.MethodDelete, "/v1/gate?service=orders&env=production", "", nil)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("unauthenticated delete: code=%d, want 401", rec.Code)
+	}
+	rec, _ = do(t, h, http.MethodDelete, "/v1/gate?service=orders", testToken, nil)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("delete with no env: code=%d, want 400", rec.Code)
+	}
+	// Deleting something that was never there is not an error.
+	rec, _ = do(t, h, http.MethodDelete, "/v1/gate?service=ghost&env=nowhere", testToken, nil)
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("delete of unknown gate: code=%d, want 204", rec.Code)
+	}
+}

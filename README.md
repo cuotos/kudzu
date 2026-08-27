@@ -51,9 +51,34 @@ Write (require a bearer token from `KUDZU_WRITE_TOKENS`):
 |---|---|
 | `POST /v1/gate/freeze` | `{service, env, reason, actor, ttl_seconds?}` |
 | `POST /v1/gate/unfreeze` | `{service, env, actor}` — clears a manual freeze **and** resets a trip |
+| `DELETE /v1/gate?service=&env=` | forget the gate entirely — see below |
 | `POST /v1/deploy-result` | `{service, env, status:"success"\|"failed", repo:"owner/name", base?, sha?, run_url?, actor?}` |
 | `POST /v1/schedules` | `{service, env, reason, cron, duration_seconds}` (recurring) or `{…, start, end}` (one-off) |
 | `DELETE /v1/schedules/{id}?service=&env=` | remove a window |
+
+### Forgetting a gate
+
+A gate becomes known the first time it is frozen, scheduled, or a deploy result
+lands for it, and then it stays known — unfreezing a gate leaves it on the board
+in the open table, forever. That is right for a real service and wrong for a
+typo or a test service, which has no business being tracked at all.
+
+`DELETE /v1/gate?service=&env=` forgets one: its freeze, breaker, freeze windows
+and audit trail all go, and it leaves the board. Deleting a gate that was never
+known is a `204` as well — the caller asked for it to be gone, and it is.
+
+Two things to know:
+
+- It works whatever state the gate is in, so **deleting a blocked gate unblocks
+  it**. That grants nothing a write token could not already do through
+  `/v1/gate/unfreeze` and `DELETE /v1/schedules/{id}`, but it does discard the
+  gate's audit trail, which is stored per gate and has no global fallback.
+- A deleted gate is forgotten, not blacklisted. It reappears the moment anything
+  writes to it again — a deploy result, a freeze, or a window. If a pipeline is
+  still reporting deploys for a service, deleting its gate only buys you until
+  the next report.
+
+There is deliberately no delete button on the board; this one stays on the API.
 
 ## The gate board (UI)
 

@@ -198,6 +198,27 @@ func (s *Service) evict(k Key, r DeployResult) {
 	}()
 }
 
+// DeleteGate forgets a gate entirely: its freeze, breaker, windows and audit
+// trail, and its place on the board.
+//
+// It works whatever state the gate is in, which means deleting a blocked gate
+// unblocks it. That grants no privilege the caller did not already have —
+// Unfreeze lifts a freeze and resets a trip, and DeleteSchedule removes a
+// window — but it does discard the gate's audit trail along with it, since that
+// trail is stored per gate.
+//
+// A deleted gate is forgotten, not blacklisted: it reappears the moment
+// anything writes to it again.
+func (s *Service) DeleteGate(ctx context.Context, k Key) error {
+	if !k.valid() {
+		return ErrInvalidKey
+	}
+	if err := s.store.DeleteGate(ctx, k); err != nil {
+		return fmt.Errorf("delete gate: %w", err)
+	}
+	return nil
+}
+
 // AddSchedule validates and stores a freeze window.
 func (s *Service) AddSchedule(ctx context.Context, k Key, sc schedule.Schedule) error {
 	if !k.valid() {

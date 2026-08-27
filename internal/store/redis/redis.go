@@ -131,6 +131,17 @@ func (s *Store) DeleteSchedule(ctx context.Context, k gate.Key, id string) error
 	return s.rdb.HDel(ctx, schedKey(k), id).Err()
 }
 
+// DeleteGate removes every key the gate owns and its membership of the keys
+// set, in one round trip. Redis DEL and SREM are both no-ops on absent keys, so
+// deleting an unknown gate succeeds quietly.
+func (s *Store) DeleteGate(ctx context.Context, k gate.Key) error {
+	pipe := s.rdb.TxPipeline()
+	pipe.Del(ctx, freezeKey(k), breakerKey(k), schedKey(k), auditKey(k))
+	pipe.SRem(ctx, keysSet, k.Service+keySep+k.Env)
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
 func (s *Store) ListKeys(ctx context.Context) ([]gate.Key, error) {
 	members, err := s.rdb.SMembers(ctx, keysSet).Result()
 	if err != nil {

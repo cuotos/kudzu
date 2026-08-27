@@ -149,3 +149,61 @@ func TestPing(t *testing.T) {
 		t.Errorf("Ping = %v, want nil", err)
 	}
 }
+
+func TestDeleteGateRemovesEverythingItOwns(t *testing.T) {
+	s := New()
+	other := gate.Key{Service: "billing", Env: "production"}
+
+	for _, key := range []gate.Key{k, other} {
+		if err := s.SetFreeze(ctx, key, gate.Freeze{Reason: "hold", Since: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SetBreaker(ctx, key, gate.Breaker{Tripped: true, Fails: 1}); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.AddSchedule(ctx, key, schedule.Schedule{ID: "w1", Cron: "0 18 * * 5", Duration: time.Hour}); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.AppendAudit(ctx, key, gate.AuditEntry{Event: "freeze", Time: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := s.DeleteGate(ctx, k); err != nil {
+		t.Fatalf("DeleteGate: %v", err)
+	}
+
+	if f, err := s.GetFreeze(ctx, k); err != nil || f != nil {
+		t.Errorf("freeze survived: %v, %v", f, err)
+	}
+	if b, err := s.GetBreaker(ctx, k); err != nil || b != nil {
+		t.Errorf("breaker survived: %v, %v", b, err)
+	}
+	if scs, err := s.ListSchedules(ctx, k); err != nil || len(scs) != 0 {
+		t.Errorf("schedules survived: %v, %v", scs, err)
+	}
+	keys, err := s.ListKeys(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, got := range keys {
+		if got == k {
+			t.Errorf("deleted gate still enumerated: %v", keys)
+		}
+	}
+
+	// The neighbouring gate is untouched.
+	if f, err := s.GetFreeze(ctx, other); err != nil || f == nil {
+		t.Errorf("neighbour lost its freeze: %v, %v", f, err)
+	}
+	if scs, err := s.ListSchedules(ctx, other); err != nil || len(scs) != 1 {
+		t.Errorf("neighbour lost its schedules: %v, %v", scs, err)
+	}
+}
+
+func TestDeleteGateOnUnknownKeyIsNotAnError(t *testing.T) {
+	s := New()
+	if err := s.DeleteGate(ctx, gate.Key{Service: "nope", Env: "nowhere"}); err != nil {
+		t.Fatalf("DeleteGate on unknown key: %v", err)
+	}
+}

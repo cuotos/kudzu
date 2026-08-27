@@ -218,6 +218,17 @@ else → 500.
 over the configured token set. **Fail-closed**: with no tokens configured,
 protected routes reject everything. `require()` wraps a handler.
 
+**Forgetting a gate** — `Store.DeleteGate` drops everything a gate owns: its
+freeze, breaker, schedule hash, audit list, and its membership of the `kudzu:keys`
+set that `ListKeys` enumerates. Redis does all five in one `TxPipeline`; the
+in-memory store deletes from four maps, and `ListKeys` follows because it is
+derived from them. `DELETE /v1/gate?service=&env=` is the only caller, and there
+is no UI control for it on purpose. It succeeds on an unknown gate, since the
+caller's intent is satisfied either way, and it works from any state — which
+means it unblocks a blocked gate, granting nothing `Unfreeze` and
+`DeleteSchedule` do not already grant, but discarding the per-gate audit trail
+along with the rest.
+
 **`middleware.go`** — `instrument()`: panic recovery, structured access logging
 (health probes at debug), and metrics via the `observer` interface.
 `statusRecorder` captures the response status. The `route` label is the static

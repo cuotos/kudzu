@@ -69,6 +69,8 @@ var routes = []routeDef{
 		Handler: func(s *Server) http.HandlerFunc { return s.handleFreeze }},
 	{Method: "POST", Pattern: "/v1/gate/unfreeze", Auth: authWrite,
 		Handler: func(s *Server) http.HandlerFunc { return s.handleUnfreeze }},
+	{Method: "DELETE", Pattern: "/v1/gate", Auth: authWrite,
+		Handler: func(s *Server) http.HandlerFunc { return s.handleDeleteGate }},
 	{Method: "POST", Pattern: "/v1/deploy-result", Auth: authWrite,
 		Handler: func(s *Server) http.HandlerFunc { return s.handleDeployResult }},
 	{Method: "POST", Pattern: "/v1/schedules", Auth: authWrite,

@@ -80,6 +80,15 @@ func (s *fakeStore) DeleteSchedule(_ context.Context, k Key, id string) error { 
 
 // ListKeys reports every key the fake holds anything for, like the real stores
 // which register a key on each write. Sorted so tests see a stable order.
+func (s *fakeStore) DeleteGate(_ context.Context, k Key) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.freeze, k)
+	delete(s.breaker, k)
+	delete(s.schedules, k)
+	return nil
+}
+
 func (s *fakeStore) ListKeys(_ context.Context) ([]Key, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -314,5 +323,55 @@ func TestRecurringScheduleReportsOccurrenceBounds(t *testing.T) {
 	}
 	if g.ExpiresAt == nil || !g.ExpiresAt.Equal(start.Add(90*time.Minute)) {
 		t.Errorf("ExpiresAt = %v, want %v", g.ExpiresAt, start.Add(90*time.Minute))
+	}
+}
+
+func TestDeleteGateForgetsTheGateEntirely(t *testing.T) {
+	svc, _ := newTestService(t, nil, Config{})
+	ctx := context.Background()
+
+	if _, err := svc.Freeze(ctx, k, "test service, my mistake", "dan", 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.AddSchedule(ctx, k, schedule.Schedule{Cron: "0 18 * * 5", Duration: time.Hour}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := svc.DeleteGate(ctx, k); err != nil {
+		t.Fatalf("DeleteGate: %v", err)
+	}
+
+	// Gone from the board.
+	gates, err := svc.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, g := range gates {
+		if g.Service == k.Service && g.Env == k.Env {
+			t.Errorf("deleted gate still listed: %+v", g)
+		}
+	}
+	// And its windows with it, so it cannot refreeze itself back into existence.
+	scs, err := svc.ListAllSchedules(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scs) != 0 {
+		t.Errorf("windows survived the delete: %+v", scs)
+	}
+	// A gate that was frozen reads open again, as an untouched one does.
+	g, err := svc.Get(ctx, k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.State != StateOpen || !g.Allowed {
+		t.Errorf("deleted gate should read open: %+v", g)
+	}
+}
+
+func TestDeleteGateRejectsAnIncompleteKey(t *testing.T) {
+	svc, _ := newTestService(t, nil, Config{})
+	if err := svc.DeleteGate(context.Background(), Key{Service: "orders"}); err != ErrInvalidKey {
+		t.Fatalf("DeleteGate with no env: err = %v, want ErrInvalidKey", err)
 	}
 }
