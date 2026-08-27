@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/cuotos/kudzu/internal/gate"
+	"github.com/cuotos/kudzu/internal/schedule"
 	"github.com/cuotos/kudzu/internal/store/memory"
 )
 
@@ -164,7 +165,7 @@ func TestBuildDashboardOrdersAndSummarises(t *testing.T) {
 		{Service: "billing", Env: "production", State: gate.StateFrozen, Source: gate.SourceSchedule},
 	}
 
-	d := buildDashboard(gates, now)
+	d := buildDashboard(gates, nil, now)
 
 	if d.Mood != "frozen" {
 		t.Errorf("Mood = %q, want frozen", d.Mood)
@@ -208,7 +209,7 @@ func TestDashboardShowsFreezeTTL(t *testing.T) {
 		t.Errorf("expected the TTL in the orders row, got:\n%s", row)
 	}
 	// The gate with no TTL keeps the column, filled with an em dash.
-	if row := blockedRow(t, body, "billing"); !strings.HasSuffix(row, "<td class=\"soft\" title=\"\">—</td></tr>") {
+	if row := blockedRow(t, body, "billing"); !strings.Contains(row, "<td class=\"soft\" title=\"\">—</td><td class=\"actions\">") {
 		t.Errorf("expected an empty lifts cell for billing, got:\n%s", row)
 	}
 }
@@ -244,7 +245,7 @@ func TestBuildDashboardFormatsTTL(t *testing.T) {
 		{Service: "orders", Env: "production", State: gate.StateFrozen,
 			Source: gate.SourceManual, Since: now, ExpiresAt: &exp},
 		{Service: "web", Env: "production", State: gate.StateTripped, Source: gate.SourceBreaker, Since: now},
-	}, now)
+	}, nil, now)
 
 	if d.Blocked[0].Expires != "in 42m" {
 		t.Errorf("Expires = %q, want in 42m", d.Blocked[0].Expires)
@@ -291,5 +292,149 @@ func TestAgeLabels(t *testing.T) {
 		if got := age(c.d); got != c.want {
 			t.Errorf("age(%s) = %q, want %q", c.d, got, c.want)
 		}
+	}
+}
+
+// scheduleRow returns the schedules-table row carrying id. Each row is rendered
+// on its own source line, as the gate rows are.
+func scheduleRow(t *testing.T, body, id string) string {
+	t.Helper()
+	for line := range strings.SplitSeq(body, "\n") {
+		if strings.Contains(line, `data-id="`+id+`"`) {
+			return line
+		}
+	}
+	t.Fatalf("no schedule row for %q in:\n%s", id, body)
+	return ""
+}
+
+func TestDashboardListsScheduleWindows(t *testing.T) {
+	h := newTestRouter()
+
+	// A recurring window, and a one-off window that is in force right now.
+	do(t, h, http.MethodPost, "/v1/schedules", testToken, map[string]any{
+		"service": "orders", "env": "production", "id": "friday",
+		"reason": "no friday deploys", "cron": "0 18 * * 5", "duration_seconds": 12 * 3600,
+	})
+	now := time.Now()
+	do(t, h, http.MethodPost, "/v1/schedules", testToken, map[string]any{
+		"service": "billing", "env": "staging", "id": "xmas",
+		"reason": "change freeze", "start": now.Add(-time.Hour), "end": now.Add(3 * time.Hour),
+	})
+
+	_, body := getHTML(t, h, "/ui", "")
+
+	friday := scheduleRow(t, body, "friday")
+	for _, want := range []string{"orders", "production", "0 18 * * 5", "12h", "no friday deploys"} {
+		if !strings.Contains(friday, want) {
+			t.Errorf("recurring row missing %q: %s", want, friday)
+		}
+	}
+
+	xmas := scheduleRow(t, body, "xmas")
+	if !strings.Contains(xmas, "is-active") {
+		t.Errorf("in-force window not marked active: %s", xmas)
+	}
+	if !strings.Contains(xmas, "change freeze") {
+		t.Errorf("one-off row missing reason: %s", xmas)
+	}
+}
+
+func TestDashboardScheduleRowsCarryDeleteControls(t *testing.T) {
+	h := newTestRouter()
+	do(t, h, http.MethodPost, "/v1/schedules", testToken, map[string]any{
+		"service": "orders", "env": "production", "id": "friday",
+		"cron": "0 18 * * 5", "duration_seconds": 3600,
+	})
+
+	_, body := getHTML(t, h, "/ui", "")
+	row := scheduleRow(t, body, "friday")
+	for _, want := range []string{`data-act="delete-schedule"`, `data-service="orders"`, `data-env="production"`} {
+		if !strings.Contains(row, want) {
+			t.Errorf("schedule row missing %q: %s", want, row)
+		}
+	}
+}
+
+func TestDashboardGateRowsCarryFreezeAndUnfreezeControls(t *testing.T) {
+	h := newTestRouter()
+	do(t, h, http.MethodPost, "/v1/gate/freeze", testToken,
+		map[string]any{"service": "orders", "env": "production", "reason": "incident", "actor": "dan"})
+	do(t, h, http.MethodPost, "/v1/deploy-result", testToken,
+		map[string]any{"service": "billing", "env": "staging", "status": "success", "repo": "acme/billing"})
+
+	_, body := getHTML(t, h, "/ui", "")
+
+	blocked := blockedRow(t, body, "orders")
+	if !strings.Contains(blocked, `data-act="unfreeze"`) {
+		t.Errorf("blocked row has no unfreeze control: %s", blocked)
+	}
+
+	// The open gate's row lives in the quiet table; find it by service cell.
+	var open string
+	for line := range strings.SplitSeq(body, "\n") {
+		if strings.Contains(line, "<td>billing</td>") && !strings.Contains(line, `class="state"`) {
+			open = line
+		}
+	}
+	if open == "" {
+		t.Fatalf("no open row for billing in:\n%s", body)
+	}
+	if !strings.Contains(open, `data-act="freeze"`) {
+		t.Errorf("open row has no freeze control: %s", open)
+	}
+	if !strings.Contains(open, `data-env="staging"`) {
+		t.Errorf("open row missing env data attribute: %s", open)
+	}
+}
+
+func TestDashboardEscapesScheduleFields(t *testing.T) {
+	h := newTestRouter()
+	do(t, h, http.MethodPost, "/v1/schedules", testToken, map[string]any{
+		"service": "orders", "env": "production", "id": "evil",
+		"reason": `<script>alert(1)</script>`, "cron": "0 18 * * 5", "duration_seconds": 3600,
+	})
+
+	_, body := getHTML(t, h, "/ui", "")
+	if strings.Contains(body, "<script>alert(1)</script>") {
+		t.Fatalf("schedule reason rendered unescaped:\n%s", body)
+	}
+}
+
+func TestBuildDashboardFormatsScheduleWindows(t *testing.T) {
+	now := time.Date(2026, 3, 2, 12, 0, 0, 0, time.UTC)
+	start, end := now.Add(-time.Hour), now.Add(2*time.Hour)
+
+	d := buildDashboard(nil, []gate.ScheduleEntry{
+		{
+			Service: "orders", Env: "production",
+			Schedule: schedule.Schedule{ID: "friday", Cron: "0 18 * * 5", Duration: 12 * time.Hour},
+		},
+		{
+			Service: "billing", Env: "staging",
+			Schedule: schedule.Schedule{ID: "xmas", Start: &start, End: &end},
+			Active:   true, Since: &start, Until: &end,
+		},
+	}, now)
+
+	if len(d.Schedules) != 2 {
+		t.Fatalf("want 2 schedules, got %d", len(d.Schedules))
+	}
+	byID := map[string]uiSchedule{}
+	for _, row := range d.Schedules {
+		byID[row.ID] = row
+	}
+
+	if got := byID["friday"].Window; got != "0 18 * * 5 for 12h" {
+		t.Errorf("recurring window label = %q", got)
+	}
+	if byID["friday"].Active {
+		t.Error("recurring window wrongly marked active")
+	}
+	if got := byID["xmas"].Window; !strings.Contains(got, "2026") {
+		t.Errorf("one-off window label = %q, want an absolute interval", got)
+	}
+	if got := byID["xmas"].Lifts; got != "in 2h" {
+		t.Errorf("active window lifts = %q", got)
 	}
 }

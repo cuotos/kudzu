@@ -70,7 +70,7 @@ internal/
     memory/                gate.Store in memory (tests / local single-replica)
   github/                  gate.Evicter via a GitHub App (merge-queue eviction)
   httpapi/                 router, handlers, bearer auth, logging/metrics/recovery mw
-    templates/             embedded HTML for the read-only gate board
+    templates/             embedded HTML for the gate board
   observability/           Prometheus registry, HTTP instruments, live gate collector
   config/                  load Config from environment variables
 deploy/                    Dockerfile + Helm chart
@@ -223,16 +223,28 @@ protected routes reject everything. `require()` wraps a handler.
 `statusRecorder` captures the response status. The `route` label is the static
 pattern (not the concrete path) to keep metric cardinality bounded.
 
-**`ui.go` + `templates/dashboard.html`** — the read-only gate board served at
-`/` and `/ui`, gated by the same `RequireReadAuth` switch as the other reads.
-The template is `go:embed`ed and parsed at package init, so a broken template
-fails the binary rather than a request; `buildDashboard` turns `[]gate.Gate`
-into a logic-free view model (blocked gates as a detail table, open gates as a
-quieter service/environment one, plus the worst-state "mood" that colours the
-page; a `dash` template func keeps empty cells from collapsing a row). The
-page is rendered into a buffer before writing so a template error cannot emit
-half a page. No JS build step and no external assets: one file, one `<style>`,
-and a small `setInterval` that re-fetches and swaps the board every 15s.
+**`ui.go` + `templates/dashboard.html`** — the gate board served at `/` and
+`/ui`, gated by the same `RequireReadAuth` switch as the other reads. The
+template is `go:embed`ed and parsed at package init, so a broken template fails
+the binary rather than a request; `buildDashboard` turns `[]gate.Gate` and
+`[]gate.ScheduleEntry` into a logic-free view model (blocked gates as a detail
+table, open gates as a quieter service/environment one, freeze windows as a
+third, plus the worst-state "mood" that colours the page; a `dash` template func
+keeps empty cells from collapsing a row). The page is rendered into a buffer
+before writing so a template error cannot emit half a page. No JS build step and
+no external assets: one file, one `<style>`, and a small `setInterval` that
+re-fetches and swaps the board every 15s.
+
+The board's write controls add no routes and no server-side auth: the browser
+asks for a `KUDZU_WRITE_TOKENS` value, keeps it in `sessionStorage`, and calls
+the existing `/v1/gate/freeze`, `/v1/gate/unfreeze` and `/v1/schedules`
+endpoints with an `Authorization` header, sending the operator's remembered name
+as the `actor`. Because that check is client-side, the buttons are always
+present in the markup and revealed by a `data-signed-in` attribute on `<body>`;
+pressing one without a token gets the same `401` any other client would, and the
+JS drops the stored token and re-prompts. Row controls are wired by event
+delegation, since refresh swaps the rows out wholesale; the refresh skips a tick
+while a `<dialog>` is open so it cannot destroy a half-filled form.
 
 **`handlers_test.go`, `ui_test.go`, `docs_test.go`** — HTTP-level tests driving a
 real `gate.Service` over the in-memory store. `docs_test.go` also holds the three

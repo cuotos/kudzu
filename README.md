@@ -39,7 +39,7 @@ Read (token optional, controlled by `KUDZU_REQUIRE_READ_AUTH`):
 | `GET /v1/gate?service=&env=` | Effective gate for one service/env (`{state, allowed, reason, source, since, actor, expires_at}`). `expires_at` is set when the state lapses on its own — a freeze TTL or the end of the active schedule window — and absent for a trip or an open-ended freeze. The merge-queue check reads `.allowed`. |
 | `GET /v1/gates` | All known gates (dashboard). |
 | `GET /v1/schedules` | Every freeze window Kudzu knows about, across all gates. Each entry carries its `service`/`env`, an `active` flag, and `since`/`until` bounds while active. Pass `?service=&env=` to narrow it to one gate. |
-| `GET /` and `GET /ui` | The gate board — a read-only HTML dashboard (see below). |
+| `GET /` and `GET /ui` | The gate board — an HTML dashboard (see below). |
 | `GET /docs` | This API, documented (see below). |
 | `GET /openapi.json` | The same API as an OpenAPI 3.1 document. |
 | `GET /healthz` / `GET /readyz` / `GET /metrics` | Liveness / readiness (pings Redis) / Prometheus. |
@@ -57,17 +57,37 @@ Write (require a bearer token from `KUDZU_WRITE_TOKENS`):
 
 ## The gate board (UI)
 
-`GET /` (or `/ui`) serves a read-only dashboard of every known gate. It leads
-with the one thing you open it for — how many gates are blocked right now —
-then lists the blocked gates in a table — service, environment, state, source,
-reason, actor, age — above a quieter service/environment table of the open ones.
-Anything that lifts by itself (a freeze with a `ttl_seconds`, or a scheduled
-window) shows when. It refreshes itself every 15 seconds.
+`GET /` (or `/ui`) serves a dashboard of every known gate. It leads with the one
+thing you open it for — how many gates are blocked right now — then lists the
+blocked gates in a table — service, environment, state, source, reason, actor,
+age — above a quieter service/environment table of the open ones, and below that
+every declared freeze window. Anything that lifts by itself (a freeze with a
+`ttl_seconds`, or a scheduled window) shows when. It refreshes itself every 15
+seconds.
 
 The page is a single `html/template` embedded in the binary: no separate
 frontend, no build step, no external assets or fonts, so it works offline and
-behind a strict CSP. It is **read-only** — freezing and unfreezing stay on the
-authenticated API.
+behind a strict CSP.
+
+### Acting from the board
+
+Out of the box the board is read-only: no buttons, nothing to press. Click
+**sign in**, paste a value from `KUDZU_WRITE_TOKENS` and give your name, and the
+controls appear — freeze and unfreeze per gate, freeze a service/environment
+Kudzu has never seen, and add or delete freeze windows. They call the same
+authenticated endpoints listed above; your name is sent as the `actor`, so the
+board still records who did what.
+
+The token is held in `sessionStorage` and is gone when you close the tab; your
+name is remembered in `localStorage`. Two consequences worth knowing:
+
+- The token is readable by any script running on the page. Kudzu ships no
+  third-party JS and escapes every stored field through `html/template`, but a
+  browser is still a worse place to keep a write token than a CI secret store.
+- Because the check is client-side, the server cannot tell a signed-in browser
+  from a signed-out one. The buttons are always in the HTML and simply return
+  `401` if pressed without a valid token — the authorisation itself is entirely
+  server-side, as before.
 
 It is served under the same auth rules as the other read endpoints, so with
 `KUDZU_REQUIRE_READ_AUTH=true` a browser cannot load it (browsers do not send

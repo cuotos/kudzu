@@ -210,6 +210,169 @@
     border-radius: 2px;
     padding: 0.05rem 0.3rem;
   }
+  /* --- controls: present in the markup, revealed once a token is held --- */
+  .act, .add, .signed-only { display: none; }
+  body[data-signed-in] .act,
+  body[data-signed-in] .add,
+  body[data-signed-in] .signed-only { display: inline-flex; }
+
+  button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+  .act, .add, .session {
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    padding: 0.2rem 0.55rem;
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    background: var(--panel);
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .act:hover, .add:hover, .session:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .act[disabled], .add[disabled], .session[disabled] { opacity: 0.4; cursor: progress; }
+  .session { display: inline-flex; margin-left: 0.75rem; }
+  /* An author `display` beats the UA rule for [hidden], so say it explicitly:
+     with JS off the button never appears, because it would do nothing. */
+  .session[hidden] { display: none; }
+  .bar-stamp { margin-left: auto; }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    margin: 0 0 0.7rem;
+  }
+  .section-head .section-label { margin: 0; }
+  .gate-table td.actions, .open-table td.actions { text-align: right; }
+
+  /* --- schedules: the quiet middle ground between blocked and open --- */
+  .sched-block { padding: 2.25rem 0 0; }
+  .sched-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    text-align: left;
+  }
+  .sched-table th {
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--ink-soft);
+    white-space: nowrap;
+    padding: 0 1.25rem 0.5rem 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .sched-table td {
+    padding: 0.45rem 1.25rem 0.45rem 0;
+    border-bottom: 1px solid var(--rule);
+    color: var(--ink-soft);
+    font-family: var(--mono);
+  }
+  .sched-table tr:last-child td { border-bottom: 0; }
+  .sched-table td:first-child { color: var(--ink); }
+  .sched-table .window { white-space: nowrap; }
+  .sched-table .reason { font-family: var(--sans); }
+  .sched-table tr.is-active td { color: var(--frozen); }
+  .sched-table tr.is-active td:first-child { color: var(--frozen); font-weight: 600; }
+  .sched-table .now {
+    font-family: var(--sans);
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    white-space: nowrap;
+  }
+
+  /* --- dialogs --- */
+  dialog {
+    background: var(--panel);
+    color: var(--ink);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: 1.5rem;
+    width: min(28rem, calc(100vw - 2rem));
+  }
+  dialog::backdrop { background: rgb(0 0 0 / 0.45); }
+  dialog h2 {
+    margin: 0 0 1rem;
+    font-size: 0.66rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--ink-soft);
+  }
+  dialog label {
+    display: block;
+    margin: 0 0 0.75rem;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ink-soft);
+  }
+  dialog input, dialog select {
+    display: block;
+    width: 100%;
+    margin-top: 0.3rem;
+    padding: 0.4rem 0.5rem;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    text-transform: none;
+    letter-spacing: normal;
+    color: var(--ink);
+    background: var(--ground);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+  }
+  dialog .row { display: flex; gap: 0.75rem; }
+  dialog .row > label { flex: 1; }
+  dialog .hint {
+    margin: -0.4rem 0 1rem;
+    font-size: 0.7rem;
+    color: var(--ink-soft);
+  }
+  dialog .buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    margin-top: 1.25rem;
+  }
+  dialog .buttons button {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    padding: 0.4rem 0.9rem;
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+  }
+  dialog .buttons .primary {
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  dialog fieldset { border: 0; padding: 0; margin: 0; }
+  dialog fieldset[hidden] { display: none; }
+
+  /* --- error line, shown when a write is rejected --- */
+  .oops {
+    margin: 1rem 0 0;
+    padding: 0.6rem 0.8rem;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--tripped);
+    border: 1px solid var(--tripped);
+    border-radius: 2px;
+  }
+  .oops[hidden] { display: none; }
+
   a { color: inherit; }
   a:focus-visible, [tabindex]:focus-visible {
     outline: 2px solid var(--accent);
@@ -222,6 +385,7 @@
   <header class="bar" id="bar" data-mood="{{.Mood}}">
     <span class="wordmark">kudzu</span>
     <span class="bar-meta">gate board</span>
+    <button type="button" class="session" id="session" hidden>sign in</button>
     <span class="bar-stamp">{{.Tracked}} &middot; {{.Updated}}</span>
   </header>
 
@@ -247,10 +411,11 @@
               <th scope="col">By</th>
               <th scope="col">Since</th>
               <th scope="col">Lifts</th>
+              <th scope="col"><span class="signed-only">Action</span></th>
             </tr>
           </thead>
           <tbody>
-            {{range .Blocked}}<tr{{if eq .State "tripped"}} class="is-tripped"{{end}}><td>{{.Service}}</td><td class="env">{{.Env}}</td><td class="state">{{.State}}</td><td class="soft">{{dash .Source}}</td><td class="reason">{{dash .Reason}}</td><td class="soft">{{dash .Actor}}</td><td class="soft" title="{{.Stamp}}">{{dash .Age}}</td><td class="soft" title="{{.ExpiresStamp}}">{{dash .Expires}}</td></tr>
+            {{range .Blocked}}<tr{{if eq .State "tripped"}} class="is-tripped"{{end}}><td>{{.Service}}</td><td class="env">{{.Env}}</td><td class="state">{{.State}}</td><td class="soft">{{dash .Source}}</td><td class="reason">{{dash .Reason}}</td><td class="soft">{{dash .Actor}}</td><td class="soft" title="{{.Stamp}}">{{dash .Age}}</td><td class="soft" title="{{.ExpiresStamp}}">{{dash .Expires}}</td><td class="actions"><button type="button" class="act" data-act="unfreeze" data-service="{{.Service}}" data-env="{{.Env}}">unfreeze</button></td></tr>
             {{end}}
           </tbody>
         </table>
@@ -260,14 +425,16 @@
 
     {{if .Open}}
     <section class="open-block">
-      <h2 class="section-label">open &middot; {{len .Open}}</h2>
+      <div class="section-head">
+        <h2 class="section-label">open &middot; {{len .Open}}</h2>
+      </div>
       <div class="table-wrap">
         <table class="open-table">
           <thead>
-            <tr><th scope="col">Service</th><th scope="col">Environment</th></tr>
+            <tr><th scope="col">Service</th><th scope="col">Environment</th><th scope="col"><span class="signed-only">Action</span></th></tr>
           </thead>
           <tbody>
-            {{range .Open}}<tr><td>{{.Service}}</td><td>{{.Env}}</td></tr>
+            {{range .Open}}<tr><td>{{.Service}}</td><td>{{.Env}}</td><td class="actions"><button type="button" class="act" data-act="freeze" data-service="{{.Service}}" data-env="{{.Env}}">freeze</button></td></tr>
             {{end}}
           </tbody>
         </table>
@@ -275,14 +442,380 @@
     </section>
     {{end}}
 
-    <p class="foot">Read-only. Freeze with <code>POST /v1/gate/freeze</code>, clear with <code>POST /v1/gate/unfreeze</code>.</p>
+    <section class="sched-block">
+      <div class="section-head">
+        <h2 class="section-label">freeze windows{{if .Schedules}} &middot; {{len .Schedules}}{{end}}</h2>
+        <button type="button" class="add" data-act="new-schedule">add window</button>
+      </div>
+      {{if .Schedules}}
+      <div class="table-wrap">
+        <table class="sched-table">
+          <thead>
+            <tr>
+              <th scope="col">Service</th>
+              <th scope="col">Environment</th>
+              <th scope="col">Window</th>
+              <th scope="col">Reason</th>
+              <th scope="col">Now</th>
+              <th scope="col">Lifts</th>
+              <th scope="col"><span class="signed-only">Action</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Schedules}}<tr{{if .Active}} class="is-active"{{end}}><td>{{.Service}}</td><td>{{.Env}}</td><td class="window">{{dash .Window}}</td><td class="reason">{{dash .Reason}}</td><td class="now">{{if .Active}}in force{{else}}&mdash;{{end}}</td><td class="window" title="{{.Stamp}}">{{dash .Lifts}}</td><td class="actions"><button type="button" class="act" data-act="delete-schedule" data-service="{{.Service}}" data-env="{{.Env}}" data-id="{{.ID}}">delete</button></td></tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+      {{else}}
+      <p class="verdict-sub">No freeze windows declared.</p>
+      {{end}}
+    </section>
+
+    <p class="foot">
+      <span class="signed-only">
+        <button type="button" class="add" data-act="new-freeze">freeze a gate&hellip;</button>
+      </span>
+      Sign in with a <code>KUDZU_WRITE_TOKENS</code> value to freeze, unfreeze and manage windows from here.
+      The same actions are available as <code>POST /v1/gate/freeze</code>, <code>POST /v1/gate/unfreeze</code> and <code>/v1/schedules</code>.
+    </p>
   </main>
+
+  <p class="oops" id="oops" hidden></p>
 </div>
 
+<!-- Dialogs live outside #board so the 15s refresh cannot rip an open one out
+     from under you. -->
+<dialog id="dlg-signin">
+  <form id="form-signin">
+    <h2>sign in</h2>
+    <label>Write token
+      <input type="password" name="token" autocomplete="off" required>
+    </label>
+    <p class="hint">A value from <code>KUDZU_WRITE_TOKENS</code>. Kept in this tab only, and forgotten when you close it.</p>
+    <label>Your name
+      <input type="text" name="actor" autocomplete="off" required>
+    </label>
+    <p class="hint">Recorded as the actor on everything you do here.</p>
+    <p class="oops" hidden></p>
+    <div class="buttons">
+      <button type="button" data-close>cancel</button>
+      <button type="submit" class="primary">sign in</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-freeze">
+  <form id="form-freeze">
+    <h2>freeze a gate</h2>
+    <div class="row">
+      <label>Service
+        <input type="text" name="service" autocomplete="off" required>
+      </label>
+      <label>Environment
+        <input type="text" name="env" autocomplete="off" required>
+      </label>
+    </div>
+    <label>Reason
+      <input type="text" name="reason" autocomplete="off" required>
+    </label>
+    <div class="row">
+      <label>Lift after
+        <input type="number" name="ttl" min="0" step="1" placeholder="leave blank to hold">
+      </label>
+      <label>Unit
+        <select name="ttlUnit">
+          <option value="60">minutes</option>
+          <option value="3600" selected>hours</option>
+          <option value="86400">days</option>
+        </select>
+      </label>
+    </div>
+    <p class="hint">Blank holds the freeze until someone unfreezes it.</p>
+    <p class="oops" hidden></p>
+    <div class="buttons">
+      <button type="button" data-close>cancel</button>
+      <button type="submit" class="primary">freeze</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-schedule">
+  <form id="form-schedule">
+    <h2>add a freeze window</h2>
+    <div class="row">
+      <label>Service
+        <input type="text" name="service" autocomplete="off" required>
+      </label>
+      <label>Environment
+        <input type="text" name="env" autocomplete="off" required>
+      </label>
+    </div>
+    <label>Reason
+      <input type="text" name="reason" autocomplete="off" required>
+    </label>
+    <label>Kind
+      <select name="kind">
+        <option value="cron" selected>recurring</option>
+        <option value="once">one-off</option>
+      </select>
+    </label>
+    <fieldset id="fs-cron">
+      <label>Cron (window start)
+        <input type="text" name="cron" placeholder="0 18 * * 5" autocomplete="off">
+      </label>
+      <div class="row">
+        <label>Held open for
+          <input type="number" name="duration" min="1" step="1" value="12">
+        </label>
+        <label>Unit
+          <select name="durationUnit">
+            <option value="60">minutes</option>
+            <option value="3600" selected>hours</option>
+            <option value="86400">days</option>
+          </select>
+        </label>
+      </div>
+      <p class="hint">Standard five-field cron, evaluated in the server's timezone.</p>
+    </fieldset>
+    <fieldset id="fs-once" hidden>
+      <label>Starts
+        <input type="datetime-local" name="start">
+      </label>
+      <label>Ends
+        <input type="datetime-local" name="end">
+      </label>
+    </fieldset>
+    <p class="oops" hidden></p>
+    <div class="buttons">
+      <button type="button" data-close>cancel</button>
+      <button type="submit" class="primary">add window</button>
+    </div>
+  </form>
+</dialog>
+
 <script>
-  // Re-fetch this page every 15s and swap in the fresh board, keeping scroll
-  // position. Without JS the page is simply static until reloaded.
+  // --- session ---------------------------------------------------------
+  // The write endpoints want a bearer token, and a browser has nowhere safe to
+  // put one, so we ask for it and keep it in sessionStorage: gone when the tab
+  // closes. Your name goes in localStorage, since it is not a secret and is
+  // tedious to retype. With no token held the board behaves exactly as it did
+  // before any of this existed: read-only, no controls.
+  const TOKEN_KEY = "kudzu.token";
+  const ACTOR_KEY = "kudzu.actor";
+
+  // Storage throws in some privacy modes, so every access is guarded.
+  function read(store, key) {
+    try { return store.getItem(key) || ""; } catch (err) { return ""; }
+  }
+  function save(store, key, value) {
+    try { value ? store.setItem(key, value) : store.removeItem(key); } catch (err) { /* nothing to do */ }
+  }
+
+  const token = () => read(sessionStorage, TOKEN_KEY);
+  const actor = () => read(localStorage, ACTOR_KEY);
+
+  const $ = (sel) => document.querySelector(sel);
+  const oops = $("#oops");
+
+  // paint reflects the session on the page. It runs after every refresh, since
+  // refresh replaces the bar the session button lives in.
+  function paint() {
+    const signed = token() !== "";
+    document.body.toggleAttribute("data-signed-in", signed);
+    const btn = $("#session");
+    if (!btn) return;
+    btn.hidden = false;
+    btn.textContent = signed ? `${actor() || "signed in"} \u00b7 sign out` : "sign in";
+  }
+
+  function complain(message, form) {
+    const target = form ? form.querySelector(".oops") : oops;
+    if (!target) return;
+    target.textContent = message;
+    target.hidden = false;
+  }
+  function clearComplaint(form) {
+    for (const el of (form || document).querySelectorAll(".oops")) el.hidden = true;
+    if (!form) oops.hidden = true;
+  }
+
+  // --- api -------------------------------------------------------------
+  async function api(method, path, body) {
+    const res = await fetch(path, {
+      method,
+      headers: Object.assign(
+        { authorization: "Bearer " + token() },
+        body ? { "content-type": "application/json" } : {},
+      ),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (res.status === 401) {
+      // The token is wrong or has been rotated; drop it and ask again.
+      save(sessionStorage, TOKEN_KEY, "");
+      paint();
+      throw new Error("token rejected \u2014 sign in again");
+    }
+    if (!res.ok) {
+      let detail = res.statusText;
+      try {
+        const parsed = await res.json();
+        if (parsed && parsed.error) detail = parsed.error;
+      } catch (err) { /* not JSON; the status will do */ }
+      throw new Error(detail);
+    }
+    return res;
+  }
+
+  // --- dialogs ---------------------------------------------------------
+  const anyDialogOpen = () => $("dialog[open]") !== null;
+
+  function openDialog(id, fill) {
+    const dlg = $(id);
+    const form = dlg.querySelector("form");
+    form.reset();
+    clearComplaint(form);
+    if (fill) fill(form);
+    dlg.showModal();
+  }
+
+  document.addEventListener("click", (ev) => {
+    const closer = ev.target.closest("[data-close]");
+    if (closer) closer.closest("dialog").close();
+  });
+
+  // --- actions ---------------------------------------------------------
+  // Row controls are wired by delegation, because refresh() swaps the rows out
+  // wholesale every 15 seconds.
+  document.addEventListener("click", async (ev) => {
+    const btn = ev.target.closest("[data-act]");
+    if (!btn) return;
+    clearComplaint();
+    const at = btn.dataset;
+
+    if (at.act === "freeze") {
+      openDialog("#dlg-freeze", (f) => {
+        f.service.value = at.service;
+        f.env.value = at.env;
+      });
+      return;
+    }
+    if (at.act === "new-freeze") {
+      openDialog("#dlg-freeze");
+      return;
+    }
+    if (at.act === "new-schedule") {
+      openDialog("#dlg-schedule", (f) => showKind(f, "cron"));
+      return;
+    }
+
+    // The remaining actions are one-shot writes with nothing to fill in.
+    btn.disabled = true;
+    try {
+      if (at.act === "unfreeze") {
+        await api("POST", "/v1/gate/unfreeze", { service: at.service, env: at.env, actor: actor() });
+      } else if (at.act === "delete-schedule") {
+        const q = new URLSearchParams({ service: at.service, env: at.env });
+        await api("DELETE", `/v1/schedules/${encodeURIComponent(at.id)}?${q}`);
+      }
+      await refresh();
+    } catch (err) {
+      complain(err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // The session button both signs in and signs out.
+  document.addEventListener("click", (ev) => {
+    if (!ev.target.closest("#session")) return;
+    if (token()) {
+      save(sessionStorage, TOKEN_KEY, "");
+      paint();
+      return;
+    }
+    openDialog("#dlg-signin", (f) => { f.actor.value = actor(); });
+  });
+
+  $("#form-signin").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const f = ev.target;
+    save(sessionStorage, TOKEN_KEY, f.token.value.trim());
+    save(localStorage, ACTOR_KEY, f.actor.value.trim());
+    paint();
+    f.closest("dialog").close();
+  });
+
+  // --- forms -----------------------------------------------------------
+  async function submitForm(ev, build) {
+    ev.preventDefault();
+    const f = ev.target;
+    clearComplaint(f);
+    const submit = f.querySelector('button[type="submit"]');
+    submit.disabled = true;
+    try {
+      const [method, path, body] = build(f);
+      await api(method, path, body);
+      f.closest("dialog").close();
+      await refresh();
+    } catch (err) {
+      complain(err.message, f);
+    } finally {
+      submit.disabled = false;
+    }
+  }
+
+  $("#form-freeze").addEventListener("submit", (ev) => submitForm(ev, (f) => {
+    const ttl = f.ttl.value.trim();
+    return ["POST", "/v1/gate/freeze", {
+      service: f.service.value.trim(),
+      env: f.env.value.trim(),
+      reason: f.reason.value.trim(),
+      actor: actor(),
+      ttl_seconds: ttl ? Number(ttl) * Number(f.ttlUnit.value) : 0,
+    }];
+  }));
+
+  // showKind switches the schedule form between a recurring and a one-off
+  // window, and moves `required` with it so the browser validates the fields
+  // actually on screen.
+  function showKind(form, kind) {
+    const recurring = kind === "cron";
+    $("#fs-cron").hidden = !recurring;
+    $("#fs-once").hidden = recurring;
+    form.cron.required = recurring;
+    form.duration.required = recurring;
+    form.start.required = !recurring;
+    form.end.required = !recurring;
+  }
+
+  $("#form-schedule").addEventListener("change", (ev) => {
+    if (ev.target.name === "kind") showKind(ev.target.form, ev.target.value);
+  });
+
+  $("#form-schedule").addEventListener("submit", (ev) => submitForm(ev, (f) => {
+    const body = {
+      service: f.service.value.trim(),
+      env: f.env.value.trim(),
+      reason: f.reason.value.trim(),
+    };
+    if (f.kind.value === "cron") {
+      body.cron = f.cron.value.trim();
+      body.duration_seconds = Number(f.duration.value) * Number(f.durationUnit.value);
+    } else {
+      // datetime-local has no timezone; the browser reads it as local time and
+      // toISOString sends the instant the operator actually meant.
+      body.start = new Date(f.start.value).toISOString();
+      body.end = new Date(f.end.value).toISOString();
+    }
+    return ["POST", "/v1/schedules", body];
+  }));
+
+  // --- refresh ---------------------------------------------------------
+  // Re-fetch this page and swap in the fresh board, keeping scroll position.
+  // Without JS the page is simply static until reloaded.
   async function refresh() {
+    if (anyDialogOpen()) return; // never yank the page out from under a form
     try {
       const res = await fetch(location.pathname, { headers: { accept: "text/html" } });
       if (!res.ok) return;
@@ -292,11 +825,13 @@
         const current = document.getElementById(id);
         if (next && current) current.replaceWith(next);
       }
+      paint();
     } catch (err) {
       /* offline or mid-deploy: leave the last good board on screen */
     }
   }
   setInterval(refresh, 15000);
+  paint();
 </script>
 </body>
 </html>
