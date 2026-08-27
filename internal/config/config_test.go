@@ -11,6 +11,7 @@ import (
 var allEnv = []string{
 	"KUDZU_ADDR", "REDIS_ADDR", "REDIS_PASSWORD", "REDIS_DB",
 	"REQUIRED_CHECK_CONTEXT", "GITHUB_API_BASE_URL", "KUDZU_REQUIRE_READ_AUTH",
+	"KUDZU_UI_WRITES",
 	"BREAKER_FAILURE_THRESHOLD", "KUDZU_WRITE_TOKENS",
 	"GITHUB_APP_ID", "GITHUB_APP_INSTALLATION_ID",
 	"GITHUB_APP_PRIVATE_KEY", "GITHUB_APP_PRIVATE_KEY_FILE",
@@ -47,6 +48,9 @@ func TestLoadDefaults(t *testing.T) {
 	if c.RequireReadAuth {
 		t.Error("RequireReadAuth = true, want false")
 	}
+	if c.UIWrites {
+		t.Error("UIWrites = true, want false (the board is read-only unless asked)")
+	}
 	if c.FailureThreshold != 1 {
 		t.Errorf("FailureThreshold = %d, want 1", c.FailureThreshold)
 	}
@@ -66,6 +70,7 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("REDIS_DB", "3")
 	t.Setenv("REQUIRED_CHECK_CONTEXT", "deploy-gate")
 	t.Setenv("KUDZU_REQUIRE_READ_AUTH", "true")
+	t.Setenv("KUDZU_UI_WRITES", "true")
 	t.Setenv("BREAKER_FAILURE_THRESHOLD", "5")
 	t.Setenv("KUDZU_WRITE_TOKENS", "a, b ,, c")
 
@@ -84,6 +89,9 @@ func TestLoadFromEnv(t *testing.T) {
 	}
 	if !c.RequireReadAuth {
 		t.Error("RequireReadAuth = false, want true")
+	}
+	if !c.UIWrites {
+		t.Error("UIWrites = false, want true")
 	}
 	if c.FailureThreshold != 5 {
 		t.Errorf("FailureThreshold = %d, want 5", c.FailureThreshold)

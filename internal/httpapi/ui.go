@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/cuotos/kudzu/internal/gate"
+	"github.com/cuotos/kudzu/internal/schedule"
 )
 
 //go:embed templates/dashboard.html templates/docs.html
@@ -41,6 +42,20 @@ type uiGate struct {
 	ExpiresStamp string // absolute expiry, shown on hover
 }
 
+// uiSchedule is one freeze window as the dashboard shows it: the gate it
+// belongs to plus a pre-formatted window label, so the template stays
+// logic-free.
+type uiSchedule struct {
+	Service string
+	Env     string
+	ID      string
+	Reason  string
+	Window  string // "0 18 * * 5 for 12h", or an absolute interval for a one-off
+	Active  bool   // the window contains now
+	Lifts   string // "in 2h"; empty unless active
+	Stamp   string // absolute end of the current occurrence, shown on hover
+}
+
 // uiData is the dashboard view model.
 type uiData struct {
 	Mood     string // open | frozen | tripped | empty — the worst state present
@@ -51,9 +66,16 @@ type uiData struct {
 	Updated  string
 	Blocked  []uiGate
 	Open     []uiGate
+
+	Schedules []uiSchedule
+
+	// Writes renders the freeze/unfreeze/schedule controls. When false the
+	// page carries no controls, no dialogs and no session script at all, so
+	// there is nothing to press rather than something merely hidden.
+	Writes bool
 }
 
-// handleUI renders the read-only gate board.
+// handleUI renders the gate board.
 func (s *Server) handleUI(w http.ResponseWriter, r *http.Request) {
 	gates, err := s.svc.List(r.Context())
 	if err != nil {
@@ -61,10 +83,19 @@ func (s *Server) handleUI(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "kudzu: cannot read gate state", http.StatusInternalServerError)
 		return
 	}
+	schedules, err := s.svc.ListAllSchedules(r.Context())
+	if err != nil {
+		s.log.Error("dashboard failed", "err", err)
+		http.Error(w, "kudzu: cannot read freeze windows", http.StatusInternalServerError)
+		return
+	}
 
 	// Render to a buffer so a template error cannot emit half a page.
+	d := buildDashboard(gates, schedules, time.Now())
+	d.Writes = s.uiWrites
+
 	var buf bytes.Buffer
-	if err := dashboardTmpl.Execute(&buf, buildDashboard(gates, time.Now())); err != nil {
+	if err := dashboardTmpl.Execute(&buf, d); err != nil {
 		s.log.Error("dashboard render failed", "err", err)
 		http.Error(w, "kudzu: cannot render dashboard", http.StatusInternalServerError)
 		return
@@ -75,9 +106,9 @@ func (s *Server) handleUI(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(buf.Bytes())
 }
 
-// buildDashboard splits gates into blocked and open, sorts them for a stable
-// board across refreshes, and picks the verdict copy.
-func buildDashboard(gates []gate.Gate, now time.Time) uiData {
+// buildDashboard splits gates into blocked and open, sorts gates and freeze
+// windows for a stable board across refreshes, and picks the verdict copy.
+func buildDashboard(gates []gate.Gate, schedules []gate.ScheduleEntry, now time.Time) uiData {
 	slices.SortFunc(gates, func(a, b gate.Gate) int {
 		if c := cmp.Compare(a.Service, b.Service); c != 0 {
 			return c
@@ -110,6 +141,31 @@ func buildDashboard(gates []gate.Gate, now time.Time) uiData {
 		} else if d.Mood != "tripped" {
 			d.Mood = "frozen"
 		}
+	}
+
+	slices.SortFunc(schedules, func(a, b gate.ScheduleEntry) int {
+		if c := cmp.Compare(a.Service, b.Service); c != 0 {
+			return c
+		}
+		if c := cmp.Compare(a.Env, b.Env); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
+	for _, e := range schedules {
+		row := uiSchedule{
+			Service: e.Service,
+			Env:     e.Env,
+			ID:      e.ID,
+			Reason:  e.Reason,
+			Window:  windowLabel(e.Schedule),
+			Active:  e.Active,
+		}
+		if e.Active && e.Until != nil {
+			row.Lifts = remaining(e.Until.Sub(now))
+			row.Stamp = e.Until.Format(time.RFC1123)
+		}
+		d.Schedules = append(d.Schedules, row)
 	}
 
 	d.Tracked = fmt.Sprintf("%d gates", len(gates))
@@ -162,5 +218,30 @@ func remaining(d time.Duration) string {
 		return fmt.Sprintf("in %dh", int(d.Hours()))
 	default:
 		return fmt.Sprintf("in %dd", int(d.Hours()/24))
+	}
+}
+
+// windowLabel renders a freeze window as a single line: the cron expression and
+// how long it holds for a recurring window, or the absolute bounds of a one-off.
+func windowLabel(sc schedule.Schedule) string {
+	if sc.Start != nil && sc.End != nil {
+		const stamp = "02 Jan 2006 15:04 MST"
+		return sc.Start.Format(stamp) + " \u2192 " + sc.End.Format(stamp)
+	}
+	if sc.Cron != "" {
+		return sc.Cron + " for " + shortDur(sc.Duration)
+	}
+	return ""
+}
+
+// shortDur renders a window length compactly: "12h", "90m", "45s".
+func shortDur(d time.Duration) string {
+	switch {
+	case d >= time.Hour && d%time.Hour == 0:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	case d >= time.Minute:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	default:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
 	}
 }

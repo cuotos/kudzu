@@ -27,6 +27,21 @@
           "400": { "description": "service or env missing.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
           "401": { "description": "Read auth is enabled and the token was missing or wrong." }
         }
+      },
+      "delete": {
+        "tags": ["gates"],
+        "summary": "Forget a gate",
+        "description": "Removes the gate's freeze, breaker, freeze windows and audit trail, and takes it off the board. Use it when a service should never have been tracked at all \u2014 a typo, or a test service \u2014 since an unfrozen gate otherwise stays listed forever.\n\nIt works whatever state the gate is in, so deleting a blocked gate unblocks it. That grants nothing a caller with a write token could not already do via `/v1/gate/unfreeze` and `/v1/schedules/{id}`, but it does discard the gate's audit trail, which is stored per gate.\n\nA deleted gate is forgotten, not blacklisted: it reappears the moment anything writes to it again \u2014 a deploy result, a freeze, or a window.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "service", "in": "query", "required": true, "description": "Service name.", "schema": { "type": "string" } },
+          { "name": "env", "in": "query", "required": true, "description": "Environment name.", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "204": { "description": "Forgotten, or never known." },
+          "400": { "description": "service or env missing.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "Missing or invalid write token." }
+        }
       }
     },
     "/v1/gates": {

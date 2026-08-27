@@ -16,6 +16,11 @@ type Config struct {
 	RedisDB         int
 	WriteTokens     []string // bearer tokens accepted on write endpoints
 	RequireReadAuth bool     // also require a token on read endpoints
+	// UIWrites reveals the gate board's freeze/unfreeze/schedule controls. Off
+	// by default: they ask an operator to paste a write token into a browser,
+	// which is a deliberate choice rather than something an upgrade should
+	// switch on. The write API itself is unaffected either way.
+	UIWrites bool
 
 	FailureThreshold int    // consecutive failures that trip the breaker
 	CheckContext     string // commit-status context used for eviction
@@ -37,6 +42,7 @@ func Load() (Config, error) {
 		CheckContext:     getenv("REQUIRED_CHECK_CONTEXT", "kudzu-gate"),
 		GitHubAPIBaseURL: getenv("GITHUB_API_BASE_URL", "https://api.github.com/"),
 		RequireReadAuth:  getbool("KUDZU_REQUIRE_READ_AUTH", false),
+		UIWrites:         getbool("KUDZU_UI_WRITES", false),
 		FailureThreshold: getint("BREAKER_FAILURE_THRESHOLD", 1),
 		RedisDB:          getint("REDIS_DB", 0),
 	}

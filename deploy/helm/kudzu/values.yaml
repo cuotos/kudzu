@@ -13,6 +13,10 @@ config:
   breakerFailureThreshold: 1
   requiredCheckContext: kudzu-gate
   requireReadAuth: false
+  # Reveal the gate board's freeze/unfreeze/window controls. Off by default:
+  # using them means pasting a write token into a browser, so it stays a
+  # deliberate choice. The write API is unaffected either way.
+  uiWrites: false
   redis:
     # Used only when redis.enabled is false (external Redis). When the bundled
     # Redis below is enabled, REDIS_ADDR is derived from its Service instead.

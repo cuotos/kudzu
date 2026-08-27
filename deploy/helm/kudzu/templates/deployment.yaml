@@ -51,6 +51,8 @@ spec:
               value: {{ .Values.config.requiredCheckContext | quote }}
             - name: KUDZU_REQUIRE_READ_AUTH
               value: {{ .Values.config.requireReadAuth | quote }}
+            - name: KUDZU_UI_WRITES
+              value: {{ .Values.config.uiWrites | quote }}
             - name: KUDZU_WRITE_TOKENS
               valueFrom:
                 secretKeyRef:

@@ -70,7 +70,7 @@ internal/
     memory/                gate.Store in memory (tests / local single-replica)
   github/                  gate.Evicter via a GitHub App (merge-queue eviction)
   httpapi/                 router, handlers, bearer auth, logging/metrics/recovery mw
-    templates/             embedded HTML for the read-only gate board
+    templates/             embedded HTML for the gate board
   observability/           Prometheus registry, HTTP instruments, live gate collector
   config/                  load Config from environment variables
 deploy/                    Dockerfile + Helm chart
@@ -218,21 +218,60 @@ else → 500.
 over the configured token set. **Fail-closed**: with no tokens configured,
 protected routes reject everything. `require()` wraps a handler.
 
+**Forgetting a gate** — `Store.DeleteGate` drops everything a gate owns: its
+freeze, breaker, schedule hash, audit list, and its membership of the `kudzu:keys`
+set that `ListKeys` enumerates. Redis does all five in one `TxPipeline`; the
+in-memory store deletes from four maps, and `ListKeys` follows because it is
+derived from them. `DELETE /v1/gate?service=&env=` is the only caller, and there
+is no UI control for it on purpose. It succeeds on an unknown gate, since the
+caller's intent is satisfied either way, and it works from any state — which
+means it unblocks a blocked gate, granting nothing `Unfreeze` and
+`DeleteSchedule` do not already grant, but discarding the per-gate audit trail
+along with the rest.
+
 **`middleware.go`** — `instrument()`: panic recovery, structured access logging
 (health probes at debug), and metrics via the `observer` interface.
 `statusRecorder` captures the response status. The `route` label is the static
 pattern (not the concrete path) to keep metric cardinality bounded.
 
-**`ui.go` + `templates/dashboard.html`** — the read-only gate board served at
-`/` and `/ui`, gated by the same `RequireReadAuth` switch as the other reads.
-The template is `go:embed`ed and parsed at package init, so a broken template
-fails the binary rather than a request; `buildDashboard` turns `[]gate.Gate`
-into a logic-free view model (blocked gates as a detail table, open gates as a
-quieter service/environment one, plus the worst-state "mood" that colours the
-page; a `dash` template func keeps empty cells from collapsing a row). The
-page is rendered into a buffer before writing so a template error cannot emit
-half a page. No JS build step and no external assets: one file, one `<style>`,
-and a small `setInterval` that re-fetches and swaps the board every 15s.
+**`ui.go` + `templates/dashboard.html`** — the gate board served at `/` and
+`/ui`, gated by the same `RequireReadAuth` switch as the other reads. The
+template is `go:embed`ed and parsed at package init, so a broken template fails
+the binary rather than a request; `buildDashboard` turns `[]gate.Gate` and
+`[]gate.ScheduleEntry` into a logic-free view model (blocked gates as a detail
+table, open gates as a quieter service/environment one, freeze windows as a
+third, plus the worst-state "mood" that colours the page; a `dash` template func
+keeps empty cells from collapsing a row). The page is rendered into a buffer
+before writing so a template error cannot emit half a page. No JS build step and
+no external assets: one file, one `<style>`, and a small `setInterval` that
+re-fetches and swaps the board every 15s.
+
+The board's write controls add no routes and no server-side auth: the browser
+asks for a `KUDZU_WRITE_TOKENS` value, keeps it in `sessionStorage`, and calls
+the existing `/v1/gate/freeze`, `/v1/gate/unfreeze` and `/v1/schedules`
+endpoints with an `Authorization` header, sending the operator's remembered name
+as the `actor`. Because that check is client-side, the buttons are always
+present in the markup and revealed by a `data-signed-in` attribute on `<body>`;
+pressing one without a token gets the same `401` any other client would, and the
+JS drops the stored token and re-prompts. Row controls are wired by event
+delegation, since refresh swaps the rows out wholesale; the refresh skips a tick
+while a `<dialog>` is open so it cannot destroy a half-filled form.
+
+Whether any of that is rendered is `uiData.Writes`, from `KUDZU_UI_WRITES` via
+`Options.UIWrites` (default off). The flag is a template concern rather than a
+routing one: the controls, dialogs, their CSS and the whole session script sit
+behind `{{if .Writes}}`, so the read-only page has nothing to press instead of
+something hidden. The auto-refresh is deliberately outside that gate, in its own
+`<script>`, and the interactive block hooks into it through an `afterRefresh`
+array — the page refreshes identically in both modes.
+
+A blocked row whose `Source` is `schedule` gets an empty action cell.
+`Unfreeze` clears a manual freeze and resets a trip; it cannot cancel an active
+window, so the gate would recompute from the schedule and freeze straight back,
+and offering the button there would be a lie. Deleting the window is the real
+lever, and is too blunt to be a one-click action on a gate row — it would throw
+away a recurring rule to unblock a single occurrence — so it stays where it
+belongs, in the freeze windows table.
 
 **`handlers_test.go`, `ui_test.go`, `docs_test.go`** — HTTP-level tests driving a
 real `gate.Service` over the in-memory store. `docs_test.go` also holds the three

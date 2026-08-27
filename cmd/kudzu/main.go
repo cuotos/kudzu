@@ -78,6 +78,7 @@ func run(log *slog.Logger) error {
 		MetricsHandler:  metrics.Handler(),
 		WriteTokens:     cfg.WriteTokens,
 		RequireReadAuth: cfg.RequireReadAuth,
+		UIWrites:        cfg.UIWrites,
 		Log:             log,
 	})
 

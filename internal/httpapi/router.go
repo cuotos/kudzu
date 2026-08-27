@@ -14,6 +14,7 @@ type Options struct {
 	MetricsHandler  http.Handler
 	WriteTokens     []string
 	RequireReadAuth bool
+	UIWrites        bool
 	Log             *slog.Logger
 }
 
@@ -25,6 +26,7 @@ func NewRouter(opts Options) http.Handler {
 		log = slog.Default()
 	}
 	srv := newServer(opts.Service, log)
+	srv.uiWrites = opts.UIWrites
 	auth := newTokenAuth(opts.WriteTokens)
 
 	mux := http.NewServeMux()

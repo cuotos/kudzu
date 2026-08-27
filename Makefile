@@ -14,7 +14,7 @@ tidy:
 
 # Run locally against a Redis on localhost:6379.
 run:
-	REDIS_ADDR=localhost:6379 KUDZU_WRITE_TOKENS=local-dev-token go run ./cmd/kudzu
+	REDIS_ADDR=localhost:6379 KUDZU_WRITE_TOKENS=local-dev-token KUDZU_UI_WRITES=true go run ./cmd/kudzu
 
 # Bring the local Kudzu + Redis stack up / down.
 up:

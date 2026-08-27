@@ -21,6 +21,7 @@ type GateService interface {
 	Freeze(ctx context.Context, k gate.Key, reason, actor string, ttl time.Duration) (gate.Gate, error)
 	Unfreeze(ctx context.Context, k gate.Key, actor string) (gate.Gate, error)
 	RecordDeploy(ctx context.Context, r gate.DeployResult) (gate.Gate, error)
+	DeleteGate(ctx context.Context, k gate.Key) error
 	AddSchedule(ctx context.Context, k gate.Key, s schedule.Schedule) error
 	ListSchedules(ctx context.Context, k gate.Key) ([]gate.ScheduleEntry, error)
 	ListAllSchedules(ctx context.Context) ([]gate.ScheduleEntry, error)
@@ -32,6 +33,9 @@ type GateService interface {
 type Server struct {
 	svc GateService
 	log *slog.Logger
+	// uiWrites reveals the gate board's write controls. It gates the rendered
+	// page only; the write endpoints are authorised the same way regardless.
+	uiWrites bool
 }
 
 func newServer(svc GateService, log *slog.Logger) *Server {
@@ -103,6 +107,18 @@ func (s *Server) handleUnfreeze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, g)
+}
+
+// handleDeleteGate forgets a gate, so a service that should never have been on
+// the board can leave it. Deleting an unknown gate is a 204 too: the caller
+// asked for it to be gone, and it is.
+func (s *Server) handleDeleteGate(w http.ResponseWriter, r *http.Request) {
+	k := gate.Key{Service: r.URL.Query().Get("service"), Env: r.URL.Query().Get("env")}
+	if err := s.svc.DeleteGate(r.Context(), k); err != nil {
+		s.writeServiceErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleDeployResult(w http.ResponseWriter, r *http.Request) {

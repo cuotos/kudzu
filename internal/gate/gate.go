@@ -134,6 +134,10 @@ type Store interface {
 	AddSchedule(ctx context.Context, k Key, s schedule.Schedule) error
 	DeleteSchedule(ctx context.Context, k Key, id string) error
 
+	// DeleteGate forgets a gate: its freeze, breaker, windows, audit trail and
+	// its place in the key index. Deleting an unknown gate is not an error.
+	DeleteGate(ctx context.Context, k Key) error
+
 	ListKeys(ctx context.Context) ([]Key, error)
 	AppendAudit(ctx context.Context, k Key, e AuditEntry) error
 	Ping(ctx context.Context) error

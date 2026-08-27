@@ -100,6 +100,18 @@ func (s *Store) DeleteSchedule(_ context.Context, k gate.Key, id string) error {
 	return nil
 }
 
+// DeleteGate drops every map entry the gate owns, which also takes it out of
+// ListKeys, since that is derived from those maps.
+func (s *Store) DeleteGate(_ context.Context, k gate.Key) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.freezes, k)
+	delete(s.breakers, k)
+	delete(s.schedules, k)
+	delete(s.audit, k)
+	return nil
+}
+
 func (s *Store) ListKeys(_ context.Context) ([]gate.Key, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
