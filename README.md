@@ -97,8 +97,9 @@ name is remembered in `localStorage`. Two consequences worth knowing:
 One gap the controls are honest about: **a gate frozen by a schedule has no
 unfreeze button**, because `POST /v1/gate/unfreeze` clears a manual freeze and
 resets a trip but does not cancel an active window — the gate would recompute
-from the schedule and freeze straight back. Those rows link down to the freeze
-windows table instead, where the window itself can be deleted.
+from the schedule and freeze straight back. The `Source` column says `schedule`
+on those rows, and the window itself can be deleted from the freeze windows
+table below.
 
 It is served under the same auth rules as the other read endpoints, so with
 `KUDZU_REQUIRE_READ_AUTH=true` a browser cannot load it (browsers do not send

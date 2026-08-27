@@ -234,7 +234,6 @@
   }
   .act, .add, .session {
     align-items: center;
-    text-decoration: none;
     font-family: var(--mono);
     font-size: 0.7rem;
     letter-spacing: 0.04em;
@@ -421,7 +420,7 @@
             </tr>
           </thead>
           <tbody>
-            {{range .Blocked}}<tr{{if eq .State "tripped"}} class="is-tripped"{{end}}><td>{{.Service}}</td><td class="env">{{.Env}}</td><td class="state">{{.State}}</td><td class="soft">{{dash .Source}}</td><td class="reason">{{dash .Reason}}</td><td class="soft">{{dash .Actor}}</td><td class="soft" title="{{.Stamp}}">{{dash .Age}}</td><td class="soft" title="{{.ExpiresStamp}}">{{dash .Expires}}</td>{{if $.Writes}}<td class="actions">{{if eq .Source "schedule"}}<a class="act" href="#windows">window &darr;</a>{{else}}<button type="button" class="act" data-act="unfreeze" data-service="{{.Service}}" data-env="{{.Env}}">unfreeze</button>{{end}}</td>{{end}}</tr>
+            {{range .Blocked}}<tr{{if eq .State "tripped"}} class="is-tripped"{{end}}><td>{{.Service}}</td><td class="env">{{.Env}}</td><td class="state">{{.State}}</td><td class="soft">{{dash .Source}}</td><td class="reason">{{dash .Reason}}</td><td class="soft">{{dash .Actor}}</td><td class="soft" title="{{.Stamp}}">{{dash .Age}}</td><td class="soft" title="{{.ExpiresStamp}}">{{dash .Expires}}</td>{{if $.Writes}}<td class="actions">{{if ne .Source "schedule"}}<button type="button" class="act" data-act="unfreeze" data-service="{{.Service}}" data-env="{{.Env}}">unfreeze</button>{{end}}</td>{{end}}</tr>
             {{end}}
           </tbody>
         </table>
@@ -448,7 +447,7 @@
     </section>
     {{end}}
 
-    <section class="sched-block" id="windows">
+    <section class="sched-block">
       <div class="section-head">
         <h2 class="section-label">freeze windows{{if .Schedules}} &middot; {{len .Schedules}}{{end}}</h2>
         {{if .Writes}}<button type="button" class="add" data-act="new-schedule">add window</button>{{end}}

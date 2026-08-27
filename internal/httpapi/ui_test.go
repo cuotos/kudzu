@@ -474,8 +474,10 @@ func TestDashboardOmitsUnfreezeOnScheduledFreeze(t *testing.T) {
 	if strings.Contains(scheduled, `data-act="unfreeze"`) {
 		t.Errorf("scheduled freeze should carry no unfreeze control: %s", scheduled)
 	}
-	if !strings.Contains(scheduled, `href="#windows"`) {
-		t.Errorf("scheduled freeze should point at its window: %s", scheduled)
+	// The cell stays, so the row keeps its shape, but it is empty: the Source
+	// column already says "schedule", and the windows table is directly below.
+	if !strings.Contains(scheduled, `<td class="actions"></td>`) {
+		t.Errorf("scheduled freeze should have an empty action cell: %s", scheduled)
 	}
 
 	manual := blockedRow(t, body, "billing")

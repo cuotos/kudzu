@@ -254,12 +254,13 @@ something hidden. The auto-refresh is deliberately outside that gate, in its own
 `<script>`, and the interactive block hooks into it through an `afterRefresh`
 array — the page refreshes identically in both modes.
 
-A blocked row whose `Source` is `schedule` gets no `unfreeze` button, only a
-link to the freeze windows table. `Unfreeze` clears a manual freeze and resets a
-trip; it cannot cancel an active window, so the gate would recompute from the
-schedule and freeze straight back. Deleting the window is the real lever, and is
-too blunt to be a one-click action on a gate row — it would throw away a
-recurring rule to unblock a single occurrence.
+A blocked row whose `Source` is `schedule` gets an empty action cell.
+`Unfreeze` clears a manual freeze and resets a trip; it cannot cancel an active
+window, so the gate would recompute from the schedule and freeze straight back,
+and offering the button there would be a lie. Deleting the window is the real
+lever, and is too blunt to be a one-click action on a gate row — it would throw
+away a recurring rule to unblock a single occurrence — so it stays where it
+belongs, in the freeze windows table.
 
 **`handlers_test.go`, `ui_test.go`, `docs_test.go`** — HTTP-level tests driving a
 real `gate.Service` over the in-memory store. `docs_test.go` also holds the three
