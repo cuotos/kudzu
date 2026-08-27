@@ -538,3 +538,23 @@ func TestDashboardHasControlsWhenUIWritesIsOn(t *testing.T) {
 		t.Error("interactive board lost its auto-refresh")
 	}
 }
+
+func TestDashboardReasonIsOptional(t *testing.T) {
+	h := newUIWritesRouter()
+	_, body := getHTML(t, h, "/ui", "")
+
+	// The API has never required a reason, so neither should the forms.
+	for line := range strings.SplitSeq(body, "\n") {
+		if strings.Contains(line, `name="reason"`) && strings.Contains(line, "required") {
+			t.Errorf("reason input should not be required: %s", strings.TrimSpace(line))
+		}
+	}
+
+	// A gate frozen without one keeps its row shape.
+	do(t, h, http.MethodPost, "/v1/gate/freeze", testToken,
+		map[string]any{"service": "orders", "env": "production", "actor": "dan"})
+	_, body = getHTML(t, h, "/ui", "")
+	if row := blockedRow(t, body, "orders"); !strings.Contains(row, `<td class="reason">—</td>`) {
+		t.Errorf("reasonless freeze should render an em dash: %s", row)
+	}
+}
