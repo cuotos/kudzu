@@ -1,4 +1,5 @@
 {{- if .Values.redis.enabled }}
+{{- include "kudzu.redis.validatePodLabels" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,6 +22,9 @@ spec:
       labels:
         {{- include "kudzu.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: redis
+        {{- range $k, $v := .Values.redis.podLabels }}
+        {{ $k }}: {{ $v | quote }}
+        {{- end }}
     spec:
       securityContext:
         runAsNonRoot: true

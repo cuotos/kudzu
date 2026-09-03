@@ -1,3 +1,4 @@
+{{- include "kudzu.validatePodLabels" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,6 +16,9 @@ spec:
     metadata:
       labels:
         {{- include "kudzu.selectorLabels" . | nindent 8 }}
+        {{- range $k, $v := .Values.podLabels }}
+        {{ $k }}: {{ $v | quote }}
+        {{- end }}
       {{- with .Values.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}

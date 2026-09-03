@@ -86,3 +86,31 @@ silently applied to a mistake.
 {{- end -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+Reject podLabels that collide with the selector labels. Emitting both would
+produce a duplicate YAML key, and the selector is immutable on an existing
+Deployment, so the label could not take effect anyway.
+*/}}
+{{- define "kudzu.validatePodLabels" -}}
+{{- $selector := include "kudzu.selectorLabels" . | fromYaml -}}
+{{- range $k, $v := .Values.podLabels -}}
+{{- if hasKey $selector $k -}}
+{{- fail (printf "podLabels: %s is a selector label and cannot be overridden" $k) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+As kudzu.validatePodLabels, but the Redis pod's selector also carries the
+component label.
+*/}}
+{{- define "kudzu.redis.validatePodLabels" -}}
+{{- $selector := include "kudzu.selectorLabels" . | fromYaml -}}
+{{- $_ := set $selector "app.kubernetes.io/component" "redis" -}}
+{{- range $k, $v := .Values.redis.podLabels -}}
+{{- if hasKey $selector $k -}}
+{{- fail (printf "redis.podLabels: %s is a selector label and cannot be overridden" $k) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}

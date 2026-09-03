@@ -35,6 +35,10 @@ redis:
     pullPolicy: IfNotPresent
   port: 6379
 
+  # Extra labels for the bundled Redis pod; separate from the top-level
+  # podLabels, which only apply to the kudzu pods.
+  podLabels: {}
+
   # Redis server args. Empty means the chart chooses based on
   # persistence.enabled: AOF on when persisting, fully in-memory when not.
   # Override to tune durability, e.g. RDB snapshots instead of the AOF (much
@@ -159,6 +163,9 @@ networkPolicy:
 serviceMonitor:
   enabled: false
   interval: 30s
+
+# Extra labels for the kudzu pods; reusing a selector label key fails to render.
+podLabels: {}
 
 podAnnotations: {}
 nodeSelector: {}
